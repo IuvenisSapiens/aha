@@ -3,7 +3,9 @@ use candle_core::{DType, Device};
 use candle_transformers::generation::LogitsProcessor;
 use openai_dive::v1::resources::{
     chat::{
-        ChatCompletionChoice, ChatCompletionChunkChoice, ChatCompletionChunkResponse, ChatCompletionResponse, ChatMessage, ChatMessageContent, DeltaChatMessage, DeltaFunction, DeltaToolCall, Function, ToolCall
+        ChatCompletionChoice, ChatCompletionChunkChoice, ChatCompletionChunkResponse,
+        ChatCompletionResponse, ChatMessage, ChatMessageContent, DeltaChatMessage, DeltaFunction,
+        DeltaToolCall, Function, ToolCall,
     },
     shared::FinishReason,
 };

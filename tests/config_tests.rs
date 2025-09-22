@@ -1,5 +1,5 @@
-use anyhow::Result;
 use aha::models::qwen2_5vl::config::Config;
+use anyhow::Result;
 
 #[test]
 fn qwen2_5vl_config() -> Result<()> {

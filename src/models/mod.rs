@@ -1,7 +1,9 @@
 pub mod qwen2_5vl;
 use anyhow::Result;
 use candle_core::{DType, Device};
-use openai_dive::v1::resources::chat::{ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse};
+use openai_dive::v1::resources::chat::{
+    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
+};
 use rocket::futures::Stream;
 
 pub trait GenerateModel {
@@ -9,6 +11,8 @@ pub trait GenerateModel {
     where
         Self: Sized;
     fn generate(&mut self, mes: ChatCompletionParameters) -> Result<ChatCompletionResponse>;
-    fn generate_stream(&mut self, mes: ChatCompletionParameters) -> Result<impl Stream<Item = Result<ChatCompletionChunkResponse, anyhow::Error>>>;
+    fn generate_stream(
+        &mut self,
+        mes: ChatCompletionParameters,
+    ) -> Result<impl Stream<Item = Result<ChatCompletionChunkResponse, anyhow::Error>>>;
 }
-

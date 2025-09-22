@@ -1,11 +1,13 @@
 use std::{pin::pin, time::Instant};
 
-use aha::{models::{qwen2_5vl::generate::Qwen2_5VLGenerateModel, GenerateModel}, ModelType};
-use anyhow::{Result};
+use aha::{
+    ModelType,
+    models::{GenerateModel, qwen2_5vl::generate::Qwen2_5VLGenerateModel},
+};
+use anyhow::Result;
 use candle_core::{DType, Device};
 use openai_dive::v1::resources::chat::ChatCompletionParameters;
 use rocket::futures::StreamExt;
-
 
 #[test]
 fn qwen2_5vl_generate() -> Result<()> {
@@ -16,7 +18,7 @@ fn qwen2_5vl_generate() -> Result<()> {
     let dtype = DType::BF16;
 
     let model_path = "/home/jhq/huggingface_model/Qwen/Qwen2.5-VL-3B-Instruct/";
-    
+
     let message = r#"
     {
         "model": "qwen2.5vl",
@@ -40,7 +42,7 @@ fn qwen2_5vl_generate() -> Result<()> {
         ]
     }
     "#;
-    let mes:ChatCompletionParameters = serde_json::from_str(message)?;
+    let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
     // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
     let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
@@ -49,10 +51,9 @@ fn qwen2_5vl_generate() -> Result<()> {
 
     let i_start = Instant::now();
     let result = model.generate(mes)?;
-    println!("generate: \n {:?}", result);    
+    println!("generate: \n {:?}", result);
     let i_duration = i_start.elapsed();
     println!("Time elapsed in generate is: {:?}", i_duration);
-    
 
     Ok(())
 }
@@ -64,7 +65,7 @@ async fn qwen2_5vl_stream() -> Result<()> {
     let dtype = DType::BF16;
 
     let model_path = "/home/jhq/huggingface_model/Qwen/Qwen2.5-VL-3B-Instruct/";
-    
+
     let message = r#"
     {
         "model": "qwen2.5vl",
@@ -88,7 +89,7 @@ async fn qwen2_5vl_stream() -> Result<()> {
         ]
     }
     "#;
-    let mes:ChatCompletionParameters = serde_json::from_str(message)?;
+    let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
     // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
     let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
@@ -98,11 +99,11 @@ async fn qwen2_5vl_stream() -> Result<()> {
     let i_start = Instant::now();
     let mut stream = pin!(model.generate_stream(mes)?);
     while let Some(item) = stream.next().await {
-        println!("generate: \n {:?}", item);    
+        println!("generate: \n {:?}", item);
     }
-    
+
     let i_duration = i_start.elapsed();
     println!("Time elapsed in generate is: {:?}", i_duration);
-    
+
     Ok(())
 }
