@@ -17,7 +17,7 @@ impl ModelType {
         model_path: &str,
         device: Option<&Device>,
         dtype: Option<DType>,
-    ) -> Result<Box<dyn GenerateModel>> {
+    ) -> Result<Box<impl GenerateModel>> {
         match model_type {
             ModelType::Qwen2_5VL => {
                 let model = Qwen2_5VLGenerateModel::init(model_path, device, dtype)?;
