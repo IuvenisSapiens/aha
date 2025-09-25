@@ -1,6 +1,6 @@
-pub mod qwen2_5vl;
-pub mod minicpm4;
 pub mod base_modules;
+pub mod minicpm4;
+pub mod qwen2_5vl;
 
 use anyhow::Result;
 use candle_core::{DType, Device};
@@ -17,5 +17,7 @@ pub trait GenerateModel {
     fn generate_stream(
         &mut self,
         mes: ChatCompletionParameters,
-    ) -> Result<impl Stream<Item = Result<ChatCompletionChunkResponse, anyhow::Error>>>;
+    ) -> Result<impl Stream<Item = Result<ChatCompletionChunkResponse, anyhow::Error>>>
+    where
+        Self: Sized;
 }

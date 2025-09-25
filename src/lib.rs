@@ -18,15 +18,15 @@ impl ModelType {
         model_path: &str,
         device: Option<&Device>,
         dtype: Option<DType>,
-    ) -> Result<Box<impl GenerateModel>> {
+    ) -> Result<Box<dyn GenerateModel>> {
         match model_type {
             ModelType::Qwen2_5VL => {
                 let model = Qwen2_5VLGenerateModel::init(model_path, device, dtype)?;
-                Ok(Box::new(model))
+                Ok(Box::new(model) as Box<dyn GenerateModel>)
             },
             ModelType::MiniCPM4 => {
                 let model = MiniCPMGenerateModel::init(model_path, device, dtype)?;
-                Ok(Box::new(model))  
+                Ok(Box::new(model)as Box<dyn GenerateModel>)
             }
         }
     }
