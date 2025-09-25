@@ -1,6 +1,55 @@
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor, shape::Dim};
 
+pub fn prepare_causal_attention_mask(
+    b_size: usize,
+    tgt_len: usize,
+    seqlen_offset: usize,
+    device: &Device
+) -> Result<Tensor> {
+    // Sliding window mask?
+    let mask: Vec<_> = (0..tgt_len)
+        .flat_map(|i| {
+            (0..tgt_len).map(move |j| {
+                if i < j {
+                    f32::NEG_INFINITY
+                } else {
+                    0.
+                }
+            })
+        })
+        .collect();
+    let mask = Tensor::from_slice(&mask, (tgt_len, tgt_len), device)?;
+    let mask = if seqlen_offset > 0 {
+        let mask0 = Tensor::zeros((tgt_len, seqlen_offset), DType::U32, device)?;
+        Tensor::cat(&[&mask0, &mask], D::Minus1)?
+    } else {
+        mask
+    };
+    let mask = mask
+        .expand((b_size, 1, tgt_len, tgt_len + seqlen_offset))?
+        .to_dtype(DType::U32)?;
+    Ok(mask)
+}
+
+pub fn repeat_kv(xs: Tensor, n_rep: usize) -> Result<Tensor> {
+    if n_rep == 1 {
+        Ok(xs)
+    } else {
+        let (b_sz, n_kv_head, seq_len, head_dim) = xs.dims4()?;
+        // Using cat is faster than a broadcast as it avoids going through a potentially
+        // strided copy.
+        // https://github.com/huggingface/candle/pull/2043
+        let kv = Tensor::cat(&vec![&xs; n_rep], 2)?.reshape((
+            b_sz,
+            n_kv_head * n_rep,
+            seq_len,
+            head_dim,
+        ))?;
+        Ok(kv)
+    }
+}
+
 pub fn split(t: &Tensor, splits: &[usize], dim: D) -> Result<Vec<Tensor>> {
     let dim = dim.to_index(t.shape(), "split")?;
     let mut split_res = Vec::new();

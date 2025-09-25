@@ -1,0 +1,136 @@
+use crate::models::minicpm4::config::MiniCPM4Config;
+use crate::models::minicpm4::model::MiniCPMModel;
+// use crate::models::GenerateStream;
+use crate::utils::utils::{
+    build_completion_chunk_response, build_completion_response, find_safetensors_files, get_device,
+    get_dtype, get_logit_processor,
+};
+use crate::{
+    chat_template::chat_template::ChatTemplate, models::GenerateModel,
+    tokenizer::tokenizer::TokenizerModel,
+};
+use anyhow::{Result, anyhow};
+use candle_core::{D, DType, Device, IndexOp, Tensor};
+use candle_nn::VarBuilder;
+use openai_dive::v1::resources::chat::{
+    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
+};
+use rocket::async_stream::stream;
+use rocket::futures::Stream;
+
+pub struct MiniCPMGenerateModel<'a> {
+    chat_template: ChatTemplate<'a>,
+    tokenizer: TokenizerModel,
+    minicpm: MiniCPMModel,
+    device: Device,
+    endoftext_id: u32,
+    im_end_id: u32,
+}
+
+impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
+    fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
+        let chat_template = ChatTemplate::init(path)?;
+        let tokenizer = TokenizerModel::init(path)?;
+        let config_path = path.to_string() + "/config.json";
+        let cfg: MiniCPM4Config = serde_json::from_slice(&std::fs::read(config_path)?)?;
+        let device = &get_device(device);
+        let cfg_dtype = cfg.torch_dtype.as_str();
+        let dtype = get_dtype(dtype, cfg_dtype);
+        let endoftext_id = cfg.eos_token_id[0];
+        let im_end_id = cfg.eos_token_id[1];
+        let model_list = find_safetensors_files(&path)?;
+        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&model_list, dtype, device)? };
+        let minicpm = MiniCPMModel::new(vb, cfg)?;
+
+        Ok(MiniCPMGenerateModel {
+            chat_template,
+            tokenizer,
+            minicpm,
+            device: device.clone(),
+            endoftext_id,
+            im_end_id,
+        })
+    }
+
+    fn generate(&mut self, mes: ChatCompletionParameters) -> Result<ChatCompletionResponse> {
+        let mut logit_processor = get_logit_processor(mes.temperature, mes.top_p);
+        let mes_render = self.chat_template.apply_chat_template(&mes)?;
+        let mut input_ids = self.tokenizer.text_encode(mes_render, &self.device)?;
+        let mut seq_len = input_ids.dim(1)?;
+        let mut seqlen_offset = 0;
+        let mut generate = Vec::new();
+        let sample_len = match mes.max_tokens {
+            Some(max) => max,
+            None => 512,
+        };
+        for _ in 0..sample_len {
+            let logits = self.minicpm.forward_step(&input_ids, seqlen_offset)?;
+            let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
+            let next_token = logit_processor.sample(&logits)?;
+            generate.push(next_token);
+            if next_token == self.endoftext_id || next_token == self.im_end_id {
+                break;
+            }
+            seqlen_offset += seq_len;
+            seq_len = 1;
+            input_ids = Tensor::from_vec(vec![next_token], (1, 1), &self.device)?;
+        }
+        let res = self.tokenizer.token_decode(generate)?;
+        self.minicpm.clear_kv_cache();
+        let response = build_completion_response(res, "minicpm");
+        Ok(response)
+    }
+    fn generate_stream(
+        &mut self,
+        mes: ChatCompletionParameters,
+    ) -> Result<impl Stream<Item = Result<ChatCompletionChunkResponse, anyhow::Error>>> {
+        let mut logit_processor = get_logit_processor(mes.temperature, mes.top_p);
+        let mes_render = self.chat_template.apply_chat_template(&mes)?;
+        let mut input_ids = self.tokenizer.text_encode(mes_render, &self.device)?;
+        let mut seq_len = input_ids.dim(1)?;
+        let mut seqlen_offset = 0;
+        let sample_len = match mes.max_tokens {
+            Some(max) => max,
+            None => 512,
+        };
+        let stream = stream! {
+            let mut error_tokens = Vec::new();
+            for _ in 0..sample_len {
+                let logits = self.minicpm.forward_step(
+                    &input_ids,
+                    seqlen_offset,
+                )?;
+                let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
+                let next_token = logit_processor.sample(&logits)?;
+                let mut decode_ids = Vec::new();
+                if error_tokens.len() > 0 {
+                    decode_ids.extend_from_slice(&error_tokens);
+                }
+                decode_ids.push(next_token);
+                let decoded_token = self.tokenizer.token_decode(decode_ids).map_err(|e| anyhow!(format!("stream decode error{}", e)))?;
+                if decoded_token.contains("�") {
+                    error_tokens.push(next_token);
+                    if error_tokens.len() > 3 {
+                        error_tokens.clear();
+                    }
+                    seqlen_offset += seq_len;
+                    seq_len = 1;
+                    input_ids = Tensor::from_vec(vec![next_token], (1, 1), &self.device)?;
+                    continue;
+                }
+                error_tokens.clear();
+                let chunk = build_completion_chunk_response(decoded_token, "minicpm", None, None);
+                yield Ok(chunk);
+                if next_token == self.endoftext_id || next_token == self.im_end_id {
+                    break;
+                }
+                seqlen_offset += seq_len;
+                seq_len = 1;
+                input_ids = Tensor::from_vec(vec![next_token], (1, 1), &self.device)?;
+
+            }
+            self.minicpm.clear_kv_cache();
+        };
+        Ok(stream)
+    }
+}

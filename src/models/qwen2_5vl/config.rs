@@ -24,10 +24,10 @@ pub struct RopeScaling {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
-pub struct Config {
+pub struct Qwen2_5VLConfig {
     pub attention_dropout: f32,
-    pub bos_token_id: usize,
-    pub eos_token_id: usize,
+    pub bos_token_id: u32,
+    pub eos_token_id: u32,
     pub vision_start_token_id: usize,
     pub vision_end_token_id: usize,
     pub vision_token_id: usize,

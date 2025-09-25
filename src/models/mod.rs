@@ -1,4 +1,7 @@
 pub mod qwen2_5vl;
+pub mod minicpm4;
+pub mod base_modules;
+
 use anyhow::Result;
 use candle_core::{DType, Device};
 use openai_dive::v1::resources::chat::{

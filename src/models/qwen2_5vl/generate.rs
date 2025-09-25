@@ -1,5 +1,5 @@
 // use crate::models::GenerateStream;
-use crate::models::qwen2_5vl::config::Config;
+use crate::models::qwen2_5vl::config::Qwen2_5VLConfig;
 use crate::utils::utils::{
     build_completion_chunk_response, build_completion_response, find_safetensors_files, get_device,
     get_dtype, get_logit_processor,
@@ -15,7 +15,6 @@ use crate::{
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
-use candle_transformers::generation::LogitsProcessor;
 use openai_dive::v1::resources::chat::{
     ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
 };
@@ -37,13 +36,13 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
         let chat_template = ChatTemplate::init(path)?;
         let tokenizer = TokenizerModel::init(path)?;
         let config_path = path.to_string() + "/config.json";
-        let cfg: Config = serde_json::from_slice(&std::fs::read(config_path)?)?;
+        let cfg: Qwen2_5VLConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
         let device = &get_device(device);
         let cfg_dtype = cfg.torch_dtype.as_str();
         let dtype = get_dtype(dtype, cfg_dtype);
         let pre_processor = Qwen2_5VLProcessor::new(device, dtype)?;
-        let endoftext_id = cfg.bos_token_id as u32;
-        let im_end_id = cfg.eos_token_id as u32;
+        let endoftext_id = cfg.bos_token_id;
+        let im_end_id = cfg.eos_token_id;
         let model_list = find_safetensors_files(&path)?;
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&model_list, dtype, device)? };
         let qwen2_5_vl = Qwen2_5VLModel::new(cfg, vb)?;

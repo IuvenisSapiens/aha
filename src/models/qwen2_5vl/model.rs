@@ -1,12 +1,10 @@
 use crate::{
-    models::qwen2_5vl::config::{Config, RopeScaling},
+    models::qwen2_5vl::config::{Qwen2_5VLConfig, RopeScaling},
     position_embed::rope::{
-        Qwen2_5VLTextRotaryEmbedding, Qwen2_5VisionRotaryEmbedding, apply_rotary_pos_emb,
-        apply_rotary_pos_emb_vision,
+        apply_rotary_pos_emb, apply_rotary_pos_emb_vision, Qwen2_5VLTextRotaryEmbedding, Qwen2_5VisionRotaryEmbedding
     },
     utils::tensor_utils::{
-        get_equal_mask, get_vision_next_indices, masked_scatter_dim0, nonzero_index,
-        safe_arg_sort_last_dim, zero_index,
+        get_equal_mask, get_vision_next_indices, masked_scatter_dim0, nonzero_index, repeat_kv, safe_arg_sort_last_dim, zero_index
     },
 };
 use anyhow::{Result, anyhow};
@@ -20,7 +18,7 @@ pub struct Qwen2_5VisionPatchEmbed {
 }
 
 impl Qwen2_5VisionPatchEmbed {
-    pub fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    pub fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let patch_size = cfg.vision_config.patch_size;
         let temporal_patch_size = cfg.vision_config.temporal_patch_size;
         let in_channels = cfg.vision_config.in_chans;
@@ -60,7 +58,7 @@ pub struct Qwen2_5VLPatchMerger {
 }
 
 impl Qwen2_5VLPatchMerger {
-    pub fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    pub fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let hidden_size =
             cfg.vision_config.hidden_size * (cfg.vision_config.spatial_merge_size.pow(2));
         let ln_q = rms_norm(
@@ -99,7 +97,7 @@ struct Qwen2_5VLVisionMLP {
 }
 
 impl Qwen2_5VLVisionMLP {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let hidden_sz = cfg.vision_config.hidden_size;
         let intermediate_sz = cfg.vision_config.intermediate_size;
         let gate_proj = linear(hidden_sz, intermediate_sz, vb.pp("gate_proj"))?;
@@ -131,7 +129,7 @@ struct Qwen2_5VLVisionAttention {
 }
 
 impl Qwen2_5VLVisionAttention {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let hidden_size = cfg.vision_config.hidden_size;
         let num_heads = cfg.vision_config.num_heads;
         let head_dim = hidden_size / num_heads;
@@ -200,7 +198,7 @@ struct Qwen2_5VLVisionBlock {
 }
 
 impl Qwen2_5VLVisionBlock {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let attn = Qwen2_5VLVisionAttention::new(cfg, vb.pp("attn"))?;
         let mlp = Qwen2_5VLVisionMLP::new(cfg, vb.pp("mlp"))?;
         let norm1 = rms_norm(
@@ -254,7 +252,7 @@ pub struct Qwen2_5VLVisionModel {
 }
 
 impl Qwen2_5VLVisionModel {
-    pub fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    pub fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let spatial_merge_size = cfg.vision_config.spatial_merge_size;
         let patch_size = cfg.vision_config.patch_size;
         let fullatt_block_indexes = cfg.vision_config.fullatt_block_indexes.clone();
@@ -539,23 +537,6 @@ impl Qwen2_5VLVisionModel {
     }
 }
 
-pub fn repeat_kv(xs: Tensor, n_rep: usize) -> Result<Tensor> {
-    if n_rep == 1 {
-        Ok(xs)
-    } else {
-        let (b_sz, n_kv_head, seq_len, head_dim) = xs.dims4()?;
-        // Using cat is faster than a broadcast as it avoids going through a potentially
-        // strided copy.
-        // https://github.com/huggingface/candle/pull/2043
-        let kv = Tensor::cat(&vec![&xs; n_rep], 2)?.reshape((
-            b_sz,
-            n_kv_head * n_rep,
-            seq_len,
-            head_dim,
-        ))?;
-        Ok(kv)
-    }
-}
 
 #[derive(Debug, Clone)]
 struct Qwen2_5VLTextMLP {
@@ -566,7 +547,7 @@ struct Qwen2_5VLTextMLP {
 }
 
 impl Qwen2_5VLTextMLP {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let hidden_sz = cfg.hidden_size;
         let intermediate_sz = cfg.intermediate_size;
         let gate_proj = linear_no_bias(hidden_sz, intermediate_sz, vb.pp("gate_proj"))?;
@@ -605,7 +586,7 @@ struct Qwen2_5VLTextAttention {
 }
 
 impl Qwen2_5VLTextAttention {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let hidden_size = cfg.hidden_size;
         let num_heads = cfg.num_attention_heads;
         let num_kv_heads = cfg.num_key_value_heads;
@@ -721,7 +702,7 @@ struct Qwen2_5VLTextDecoderLayer {
 }
 
 impl Qwen2_5VLTextDecoderLayer {
-    fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let self_attn = Qwen2_5VLTextAttention::new(cfg, vb.pp("self_attn"))?;
         let mlp = Qwen2_5VLTextMLP::new(cfg, vb.pp("mlp"))?;
         let input_layernorm =
@@ -774,7 +755,7 @@ pub struct Qwen2_5VLTextModel {
 }
 
 impl Qwen2_5VLTextModel {
-    pub fn new(cfg: &Config, vb: VarBuilder) -> Result<Self> {
+    pub fn new(cfg: &Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let embed_tokens =
             candle_nn::embedding(cfg.vocab_size, cfg.hidden_size, vb.pp("embed_tokens"))?;
         let head_dim = cfg.hidden_size / cfg.num_attention_heads;
@@ -879,13 +860,13 @@ impl Qwen2_5VLTextModel {
 pub struct Qwen2_5VLModel {
     visual: Qwen2_5VLVisionModel,
     model: Qwen2_5VLTextModel,
-    pub cfg: Config,
+    pub cfg: Qwen2_5VLConfig,
     lm_head: Linear,
     rope_deltas: Option<Tensor>,
 }
 
 impl Qwen2_5VLModel {
-    pub fn new(cfg: Config, vb: VarBuilder) -> Result<Self> {
+    pub fn new(cfg: Qwen2_5VLConfig, vb: VarBuilder) -> Result<Self> {
         let visual = Qwen2_5VLVisionModel::new(&cfg, vb.pp("visual"))?;
         let model = Qwen2_5VLTextModel::new(&cfg, vb.pp("model"))?;
         let vocab_size = cfg.vocab_size;
