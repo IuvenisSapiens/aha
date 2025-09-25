@@ -27,7 +27,7 @@ impl ModelType {
             ModelType::MiniCPM4 => {
                 let model = MiniCPMGenerateModel::init(model_path, device, dtype)?;
                 Ok(Box::new(model)as Box<dyn GenerateModel>)
-            }
+           }
         }
     }
 }

@@ -10,9 +10,9 @@ use openai_dive::v1::resources::chat::{
 use rocket::futures::Stream;
 
 pub trait GenerateModel {
-    fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self>
-    where
-        Self: Sized;
+    // fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self>
+    // where
+    //     Self: Sized;
     fn generate(&mut self, mes: ChatCompletionParameters) -> Result<ChatCompletionResponse>;
     fn generate_stream(
         &mut self,

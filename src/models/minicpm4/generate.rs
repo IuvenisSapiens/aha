@@ -27,8 +27,8 @@ pub struct MiniCPMGenerateModel<'a> {
     im_end_id: u32,
 }
 
-impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
-    fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
+impl<'a> MiniCPMGenerateModel<'a> {
+    pub fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
         let chat_template = ChatTemplate::init(path)?;
         let tokenizer = TokenizerModel::init(path)?;
         let config_path = path.to_string() + "/config.json";
@@ -51,6 +51,9 @@ impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
             im_end_id,
         })
     }
+}
+
+impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
 
     fn generate(&mut self, mes: ChatCompletionParameters) -> Result<ChatCompletionResponse> {
         let mut logit_processor = get_logit_processor(mes.temperature, mes.top_p);
