@@ -41,4 +41,5 @@ impl TokenizerModel {
             .map_err(|e| anyhow!(format!("tokenizer encode error{}", e)))?;
         Ok(decode)
     }
+
 }

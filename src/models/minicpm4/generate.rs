@@ -2,15 +2,14 @@ use crate::models::minicpm4::config::MiniCPM4Config;
 use crate::models::minicpm4::model::MiniCPMModel;
 // use crate::models::GenerateStream;
 use crate::utils::utils::{
-    build_completion_chunk_response, build_completion_response, find_safetensors_files, get_device,
-    get_dtype, get_logit_processor,
+    build_completion_chunk_response, build_completion_response, find_type_files, get_device, get_dtype, get_logit_processor
 };
 use crate::{
     chat_template::chat_template::ChatTemplate, models::GenerateModel,
     tokenizer::tokenizer::TokenizerModel,
 };
 use anyhow::{Result, anyhow};
-use candle_core::{D, DType, Device, IndexOp, Tensor};
+use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use openai_dive::v1::resources::chat::{
     ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
@@ -27,7 +26,7 @@ pub struct MiniCPMGenerateModel<'a> {
     im_end_id: u32,
 }
 
-impl<'a> MiniCPMGenerateModel<'a> {
+impl <'a> MiniCPMGenerateModel<'a> {
     pub fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
         let chat_template = ChatTemplate::init(path)?;
         let tokenizer = TokenizerModel::init(path)?;
@@ -38,7 +37,7 @@ impl<'a> MiniCPMGenerateModel<'a> {
         let dtype = get_dtype(dtype, cfg_dtype);
         let endoftext_id = cfg.eos_token_id[0];
         let im_end_id = cfg.eos_token_id[1];
-        let model_list = find_safetensors_files(&path)?;
+        let model_list = find_type_files(&path, "safetensors")?;
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&model_list, dtype, device)? };
         let minicpm = MiniCPMModel::new(vb, cfg)?;
 
@@ -64,7 +63,7 @@ impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
         let mut generate = Vec::new();
         let sample_len = match mes.max_tokens {
             Some(max) => max,
-            None => 512,
+            None => 2048,
         };
         for _ in 0..sample_len {
             let logits = self.minicpm.forward_step(&input_ids, seqlen_offset)?;

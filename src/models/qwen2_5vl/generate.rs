@@ -1,8 +1,7 @@
 // use crate::models::GenerateStream;
 use crate::models::qwen2_5vl::config::Qwen2_5VLConfig;
 use crate::utils::utils::{
-    build_completion_chunk_response, build_completion_response, find_safetensors_files, get_device,
-    get_dtype, get_logit_processor,
+    build_completion_chunk_response, build_completion_response, find_type_files, get_device, get_dtype, get_logit_processor
 };
 use crate::{
     chat_template::chat_template::ChatTemplate,
@@ -43,7 +42,8 @@ impl<'a> Qwen2_5VLGenerateModel<'a> {
         let pre_processor = Qwen2_5VLProcessor::new(device, dtype)?;
         let endoftext_id = cfg.bos_token_id;
         let im_end_id = cfg.eos_token_id;
-        let model_list = find_safetensors_files(&path)?;
+        // let model_list = find_safetensors_files(&path)?;
+        let model_list = find_type_files(&path, "safetensors")?;
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&model_list, dtype, device)? };
         let qwen2_5_vl = Qwen2_5VLModel::new(cfg, vb)?;
 
@@ -86,7 +86,7 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
         let mut generate = Vec::new();
         let sample_len = match mes.max_tokens {
             Some(max) => max,
-            None => 512,
+            None => 1024,
         };
         for _ in 0..sample_len {
             let logits = self.qwen2_5_vl.forward(

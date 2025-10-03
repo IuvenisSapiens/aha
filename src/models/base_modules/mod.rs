@@ -116,6 +116,7 @@ impl AttentionNobias {
         cos: &Tensor,
         sin: &Tensor,
         attention_mask: Option<&Tensor>,
+        tof32: bool,
     ) -> Result<Tensor> {
         let (b_sz, q_len, _) = xs.dims3()?;
         let query_states = self.q_proj.forward(xs)?;
@@ -131,7 +132,7 @@ impl AttentionNobias {
             .reshape((b_sz, q_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
         let (query_states, key_states) =
-            apply_rotary_pos_emb(&query_states, &key_states, cos, sin)?;
+            apply_rotary_pos_emb(&query_states, &key_states, cos, sin, tof32)?;
 
         let key_states = repeat_kv(key_states, self.num_kv_groups)?.contiguous()?;
         let value_states = repeat_kv(value_states, self.num_kv_groups)?.contiguous()?;
@@ -184,6 +185,7 @@ impl AttentionNobias {
         cos: &Tensor,
         sin: &Tensor,
         attention_mask: Option<&Tensor>,
+        tof32: bool,
     ) -> Result<Tensor> {
         let (b_sz, q_len, _) = xs.dims3()?;
         let query_states = self.q_proj.forward(xs)?;
@@ -199,7 +201,7 @@ impl AttentionNobias {
             .reshape((b_sz, q_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
         let (query_states, key_states) =
-            apply_rotary_pos_emb(&query_states, &key_states, cos, sin)?;
+            apply_rotary_pos_emb(&query_states, &key_states, cos, sin, tof32)?;
         let (key_states, value_states) = match &self.kv_cache {
             None => (key_states, value_states),
             Some((prev_k, prev_v)) => {

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Ok, Result};
 use candle_core::{D, DType, Device, IndexOp, Tensor, shape::Dim};
 
 pub fn prepare_causal_attention_mask(
@@ -248,4 +248,19 @@ pub fn get_vision_next_indices(input_ids: &Tensor, token_id: u32) -> Result<Tens
     let indices = nonzero_index(&mask)?;
     let indices = indices.broadcast_add(&Tensor::new(vec![1u32], input_ids.device())?)?;
     Ok(indices)
+}
+
+pub fn linspace(start: f32, end: f32, steps: usize, device: &Device) -> Result<Tensor> {
+    assert!(steps > 0, "steps must be > 0");
+    if steps == 1 {
+        let t = Tensor::from_slice(&[start], 1, device)?;
+        return Ok(t);
+    }    
+    let step_size = (end - start) / (steps-1) as f32;
+    let data: Vec<f32> = (0..steps)
+        .map(|i| start + i as f32 * step_size)
+        .collect();
+    
+    let t = Tensor::from_slice(&data, steps, device)?;
+    Ok(t)
 }

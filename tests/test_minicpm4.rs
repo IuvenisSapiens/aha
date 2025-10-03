@@ -1,39 +1,34 @@
-use std::time::Instant;
+use std::{pin::pin, time::Instant};
 
+use aha::models::{minicpm4::generate::MiniCPMGenerateModel, GenerateModel};
 use anyhow::Result;
 use candle_core::{DType, Device};
 use openai_dive::v1::resources::chat::ChatCompletionParameters;
+use rocket::futures::StreamExt;
 
 #[test]
-fn qwen2_5vl_generate() -> Result<()> {
-    // test with cpu :(太慢了, : RUST_BACKTRACE=1 cargo test qwen2_5vl_generate -- --nocapture
-    // test with cuda: RUST_BACKTRACE=1 cargo test -F cuda qwen2_5vl_generate -- --nocapture
-    // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn qwen2_5vl_generate -- --nocapture
-    let device = Device::cuda_if_available(0)?;
-    let dtype = DType::BF16;
-
+fn minicpm_generate() -> Result<()> {
+    // test with cpu :(太慢了, : RUST_BACKTRACE=1 cargo test minicpm_generate -- --nocapture
+    // test with cuda: RUST_BACKTRACE=1 cargo test -F cuda minicpm_generate -- --nocapture
+    // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn minicpm_generate -- --nocapture
+    
     let model_path = "/home/jhq/huggingface_model/OpenBMB/MiniCPM4-0.5B/";
-
     let message = r#"
     {
+        "temperature": 0.3,
+        "top_p": 0.8,
         "model": "minicpm4",
         "messages": [
             {
                 "role": "user",
-                "content": [          
-                    {
-                        "type": "text", 
-                        "text": "你是谁"
-                    }
-                ]
+                "content": "贾宝玉和孙悟空有什么关系"
             }
         ]
     }
     "#;
     let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
-    // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
-    let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
+    let mut model = MiniCPMGenerateModel::init(model_path, None, None)?;
     let i_duration = i_start.elapsed();
     println!("Time elapsed in load model is: {:?}", i_duration);
 
@@ -47,40 +42,25 @@ fn qwen2_5vl_generate() -> Result<()> {
 }
 
 #[tokio::test]
-async fn qwen2_5vl_stream() -> Result<()> {
-    // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn qwen2_5vl_generate -- --nocapture
-    let device = Device::cuda_if_available(0)?;
-    let dtype = DType::BF16;
-
-    let model_path = "/home/jhq/huggingface_model/Qwen/Qwen2.5-VL-3B-Instruct/";
+async fn minicpm_stream() -> Result<()> {
+    // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn minicpm_stream -- --nocapture
+    
+    let model_path = "/home/jhq/huggingface_model/OpenBMB/MiniCPM4-0.5B/";
 
     let message = r#"
     {
-        "model": "qwen2.5vl",
+        "model": "minicpm4",
         "messages": [
             {
                 "role": "user",
-                "content": [ 
-                    {
-                        "type": "image",
-                        "image_url": 
-                        {
-                            "url": "file://./assets/img/ocr_test.png"
-                        }
-                    },               
-                    {
-                        "type": "text", 
-                        "text": "请分析图片并提取所有可见文本内容，按从左到右、从上到下的布局，返回纯文本"
-                    }
-                ]
+                "content": "你是谁"
             }
         ]
     }
     "#;
     let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
-    // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
-    let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
+    let mut model = MiniCPMGenerateModel::init(model_path, None, None)?;
     let i_duration = i_start.elapsed();
     println!("Time elapsed in load model is: {:?}", i_duration);
 

@@ -23,10 +23,7 @@ pub struct MiniCPM4Config {
     pub rope_scaling: RopeScalingConfig,
     pub torch_dtype: String,
     pub vocab_size: usize,
-    // pub use_mup: bool,
-    pub scale_emb:f32,
+    pub scale_emb: f64,
     pub dim_model_base: usize,
     pub scale_depth: f32,
-    // pub rope_theta: f32,
-    // pub kv_channels: i32,
 }

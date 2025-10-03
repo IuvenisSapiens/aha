@@ -61,7 +61,7 @@ pub fn string_to_static_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-pub fn find_safetensors_files(path: &str) -> Result<Vec<String>> {
+pub fn find_type_files(path: &str, extension_type: &str) -> Result<Vec<String>> {
     let mut files = Vec::new();
 
     for entry in std::fs::read_dir(path)? {
@@ -70,7 +70,7 @@ pub fn find_safetensors_files(path: &str) -> Result<Vec<String>> {
 
         if file_path.is_file() {
             if let Some(extension) = file_path.extension() {
-                if extension == "safetensors" {
+                if extension == extension_type {
                     files.push(file_path.to_string_lossy().to_string());
                 }
             }
@@ -79,6 +79,7 @@ pub fn find_safetensors_files(path: &str) -> Result<Vec<String>> {
 
     Ok(files)
 }
+
 
 pub fn round_by_factor(num: u32, factor: u32) -> u32 {
     let round = (num as f32 / factor as f32).round() as u32;

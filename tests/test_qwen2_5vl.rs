@@ -1,7 +1,6 @@
 use std::{pin::pin, time::Instant};
 
 use aha::{
-    ModelType,
     models::{GenerateModel, qwen2_5vl::generate::Qwen2_5VLGenerateModel},
 };
 use anyhow::Result;
@@ -14,8 +13,8 @@ fn qwen2_5vl_generate() -> Result<()> {
     // test with cpu :(太慢了, : RUST_BACKTRACE=1 cargo test qwen2_5vl_generate -- --nocapture
     // test with cuda: RUST_BACKTRACE=1 cargo test -F cuda qwen2_5vl_generate -- --nocapture
     // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn qwen2_5vl_generate -- --nocapture
-    let device = Device::cuda_if_available(0)?;
-    let dtype = DType::BF16;
+    // let device = Device::cuda_if_available(0)?;
+    // let dtype = DType::BF16;
 
     let model_path = "/home/jhq/huggingface_model/Qwen/Qwen2.5-VL-3B-Instruct/";
 
@@ -30,7 +29,7 @@ fn qwen2_5vl_generate() -> Result<()> {
                         "type": "image",
                         "image_url": 
                         {
-                            "url": "file://./assets/img/ocr_test.png"
+                            "url": "file://./assets/img/ocr_test1.png"
                         }
                     },               
                     {
@@ -44,8 +43,7 @@ fn qwen2_5vl_generate() -> Result<()> {
     "#;
     let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
-    // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
-    let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
+    let mut model = Qwen2_5VLGenerateModel::init(model_path, None, None)?;
     let i_duration = i_start.elapsed();
     println!("Time elapsed in load model is: {:?}", i_duration);
 
@@ -61,8 +59,8 @@ fn qwen2_5vl_generate() -> Result<()> {
 #[tokio::test]
 async fn qwen2_5vl_stream() -> Result<()> {
     // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn qwen2_5vl_generate -- --nocapture
-    let device = Device::cuda_if_available(0)?;
-    let dtype = DType::BF16;
+    // let device = Device::cuda_if_available(0)?;
+    // let dtype = DType::BF16;
 
     let model_path = "/home/jhq/huggingface_model/Qwen/Qwen2.5-VL-3B-Instruct/";
 
@@ -91,8 +89,7 @@ async fn qwen2_5vl_stream() -> Result<()> {
     "#;
     let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
-    // let mut model = Qwen2_5VLGenerateModel::init(model_path, &device, dtype)?;
-    let mut model = ModelType::init(ModelType::Qwen2_5VL, model_path, None, None)?;
+    let mut model = Qwen2_5VLGenerateModel::init(model_path, None, None)?;
     let i_duration = i_start.elapsed();
     println!("Time elapsed in load model is: {:?}", i_duration);
 
