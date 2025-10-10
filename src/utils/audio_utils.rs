@@ -1,11 +1,9 @@
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, Tensor};
-use candle_nn::{conv1d_no_bias, Conv1d, Conv1dConfig, Module};
+use candle_nn::{Conv1d, Conv1dConfig, Module, conv1d_no_bias};
 use hound::{SampleFormat, WavReader};
 use rocket::futures::future::ok;
-use rubato::{
-    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
-};
+
 use std::f64::consts::PI;
 use std::path::Path;
 
@@ -89,7 +87,7 @@ pub fn get_sinc_resample_kernel(
         ResamplingMethod::SincInterpKaiser => {
             let beta_val = beta.unwrap_or(14.769656459379492);
             let i0_beta = i0(beta_val);
-            
+
             let normalized_t = t.affine(1.0 / lowpass_filter_width as f64, 0.0)?;
             let arg = (1.0 - normalized_t.sqr()?)?;
             // 处理arg为负数的情况
@@ -97,7 +95,10 @@ pub fn get_sinc_resample_kernel(
             let sqrt_dims = sqrt_arg.dims();
             let sqrt_arg_vec = sqrt_arg.flatten_all()?.to_vec1::<f32>()?;
 
-            let window_val:Vec<f32> = sqrt_arg_vec.iter().map(|x| i0(beta_val * x) / i0_beta).collect();
+            let window_val: Vec<f32> = sqrt_arg_vec
+                .iter()
+                .map(|x| i0(beta_val * x) / i0_beta)
+                .collect();
             let window = Tensor::new(window_val, device)?.reshape(sqrt_dims)?;
             window
         }
@@ -130,20 +131,21 @@ pub fn apply_sinc_resample_kernel(
 
     // 获取波形形状
     let dims = waveform.dims();
-    let waveform_flat = waveform.reshape(((), dims[dims.len()-1]))?;
+    let waveform_flat = waveform.reshape(((), dims[dims.len() - 1]))?;
 
     let (num_wavs, length) = waveform_flat.dims2()?;
-    let padded_waveform = waveform.pad_with_zeros(D::Minus1, width as usize, (width+orig_freq) as usize)?;
+    let padded_waveform =
+        waveform.pad_with_zeros(D::Minus1, width as usize, (width + orig_freq) as usize)?;
 
     // 添加通道维度 [batch_size, 1, padded_length]
     let waveform_3d = padded_waveform.unsqueeze(1)?;
     let config = Conv1dConfig {
-            padding: 0,
-            stride: orig_freq as usize,
-            dilation: 1,
-            groups: 1,
-            cudnn_fwd_algo: None,
-        };
+        padding: 0,
+        stride: orig_freq as usize,
+        dilation: 1,
+        groups: 1,
+        cudnn_fwd_algo: None,
+    };
 
     let conv1d = Conv1d::new(kernel.clone(), None, config);
     // 执行卷积
@@ -153,16 +155,15 @@ pub fn apply_sinc_resample_kernel(
 
     // 转置并重塑 [batch_size, output_length * new_freq_reduced]
     let conv_transposed = conv_output.transpose(1, 2)?.reshape((num_wavs, ()))?;
-    
+
     // 计算目标长度
-    let target_length =
-        ((new_freq as f64 * length as f64) / orig_freq as f64).ceil() as usize;
+    let target_length = ((new_freq as f64 * length as f64) / orig_freq as f64).ceil() as usize;
 
     // 截取目标长度
     let resampled_flat =
         conv_transposed.narrow(1, 0, target_length.min(conv_transposed.dim(1)?))?;
     let mut new_dims = dims.to_vec();
-    let last_dim = new_dims.len()-1;
+    let last_dim = new_dims.len() - 1;
     new_dims[last_dim] = resampled_flat.dim(1)?;
     // 恢复原始批次形状
 
@@ -182,9 +183,7 @@ pub fn resample(
     beta: Option<f32>,
 ) -> Result<Tensor> {
     if orig_freq <= 0 || new_freq <= 0 {
-        return Err(anyhow!(
-            "Frequencies must be positive".to_string(),
-        ));
+        return Err(anyhow!("Frequencies must be positive".to_string(),));
     }
 
     if orig_freq == new_freq {
@@ -226,11 +225,27 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
     let spec = reader.spec();
     let samples: Vec<f32> = match spec.sample_format {
         SampleFormat::Int => {
-            // 将整数样本转换为浮点数 [-1.0, 1.0]
-            let max_value = match spec.bits_per_sample {
-                8 => i8::MAX as f32,
-                16 => i16::MAX as f32,
-                24 => 8388607.0,
+            // 将整数样本转换为浮点数 [-1.0, 1.0]            
+            println!("spec.bits_per_sample: {}", spec.bits_per_sample);
+            let samples = match spec.bits_per_sample {
+                8 => {
+                    reader
+                    .samples::<i8>()
+                    .map(|s| s.map(|sample| sample as f32 / i8::MAX as f32))
+                    .collect::<Result<Vec<_>, _>>()?
+                },
+                16 => {
+                    reader
+                    .samples::<i16>()
+                    .map(|s| s.map(|sample| sample as f32 / i16::MAX as f32))
+                    .collect::<Result<Vec<_>, _>>()?
+                },
+                24 => {
+                    reader
+                    .samples::<i32>()
+                    .map(|s| s.map(|sample| sample as f32 / 8388607.0))
+                    .collect::<Result<Vec<_>, _>>()?
+                },
                 _ => {
                     return Err(anyhow::anyhow!(
                         "Unsupported bit depth: {}",
@@ -238,10 +253,7 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
                     ));
                 }
             };
-            reader
-                .samples::<i16>()
-                .map(|s| s.map(|sample| sample as f32 / max_value))
-                .collect::<Result<Vec<_>, _>>()?
+            samples
         }
         SampleFormat::Float => {
             // 直接读取浮点数样本
@@ -258,6 +270,7 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
         &device,
     )?
     .t()?;
+    // println!("audio channels: {}", spec.channels);
     if spec.channels > 1 {
         // 对channel通道求平均， channel维度变为1
         audio_tensor = audio_tensor.mean_keepdim(0)?;
@@ -276,4 +289,26 @@ pub fn load_audio_with_resample<P: AsRef<Path>>(
         audio = resample_simple(&audio, sr as i64, target_sample_rate as i64)?;
     }
     Ok(audio)
+}
+
+pub fn save_wav(audio: &Tensor, save_path: &str) -> Result<()> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 16000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    assert_eq!(audio.dim(0)?, 1, "audio channel must be 1");
+    let max = audio.abs()?.max_all()?;
+    let max = max.to_scalar::<f32>()?;
+    let ratio = if max > 1.0 { 32767.0 / max } else { 32767.0 };
+    let audio = audio.squeeze(0)?;
+    let audio_vec = audio.to_vec1::<f32>()?;
+    let mut writer = hound::WavWriter::create(save_path, spec).unwrap();
+    for i in audio_vec {
+        let sample_i16 = (i * ratio).round() as i16;
+        writer.write_sample(sample_i16).unwrap();
+    }
+    writer.finalize().unwrap();
+    Ok(())
 }

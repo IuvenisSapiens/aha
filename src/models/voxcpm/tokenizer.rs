@@ -45,7 +45,7 @@ impl SingleChineseTokenizer {
             .encode(text, false)
             .map_err(|e| anyhow!(format!("tokenizer encode error: {}", e)))?;
         let tokens = encode.get_tokens();
-        println!("tokens: {:?}", tokens);
+        // println!("tokens: {:?}", tokens);
         let mut split_character = Vec::new();
         for token in tokens {
             let clean_token = token.replace("▁", "to");
@@ -56,7 +56,7 @@ impl SingleChineseTokenizer {
                 split_character.push(token.clone());
             }
         }
-        println!("split_character: {:?}", split_character);
+        // println!("split_character: {:?}", split_character);
         let ids: Vec<u32> = split_character
             .iter()
             .filter_map(|c| self.tokenizer.token_to_id(c))

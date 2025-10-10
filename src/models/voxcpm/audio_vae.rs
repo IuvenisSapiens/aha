@@ -1,7 +1,7 @@
-use anyhow::{Error, Ok, Result};
-use candle_core::{D, IndexOp, Tensor};
+use anyhow::{Ok, Result};
+use candle_core::{D, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig, ConvTranspose1d, ConvTranspose1dConfig, Module, VarBuilder};
-use std::result::Result::Ok as StdOk;
+use std::{result::Result::Ok as StdOk, thread, time};
 
 pub struct CausalConv1d {
     conv1d: Conv1d,
@@ -9,13 +9,9 @@ pub struct CausalConv1d {
 }
 
 impl CausalConv1d {
-    // CausalConv1d::new(scaled_weight, bias, padding, dilation, stride)?;
     pub fn new(
         weight: Tensor,
         bias: Option<Tensor>,
-        // in_c: usize,
-        // out_c: usize,
-        // kernel_size: usize,
         padding: usize,
         dilation: usize,
         groups: usize,
@@ -59,7 +55,7 @@ impl CausalConvTranspose1d {
     ) -> Result<Self> {
         let config = ConvTranspose1dConfig {
             padding: 0,
-            output_padding,
+            output_padding: 0,
             stride,
             dilation,
             groups,
@@ -74,23 +70,10 @@ impl CausalConvTranspose1d {
         })
     }
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        println!("transpose conv input x: {:?}", x);
-        println!("transpose conv config stride: {:?}", self.config.stride);
-        println!("transpose conv config padding: {:?}", self.config.padding);
-        println!("transpose conv config output_padding: {:?}", self.config.output_padding);
-        println!("transpose conv config groups: {:?}", self.config.groups);
-        println!("transpose conv config dilation: {:?}", self.config.dilation);
-        println!("transpose conv config weight: {:?}", self.conv_transpose1d.weight());
-
         let x = self.conv_transpose1d.forward(x)?;
-        println!("transpose conv after x: {:?}", x);
-        println!("transpose conv after self.padding: {:?}", self.padding);
-        println!("transpose conv after self.output_padding: {:?}", self.output_padding);
         let last_dim = x.dim(D::Minus1)?;
         let select_num = last_dim - (self.padding * 2 - self.output_padding);
-        println!("transpose conv after select_num: {:?}", select_num);
         let x = x.narrow(D::Minus1, 0, select_num)?;
-        println!("transpose conv after x: {:?}", x);
         Ok(x)
     }
 }
@@ -109,24 +92,21 @@ impl WNCausalConv1d {
         groups: usize,
         stride: usize,
     ) -> Result<Self> {
-        let in_c = in_c / groups;
+        let in_c = in_c / groups;        
         let weight_g = vb.get((out_c, 1, 1), "weight_g")?;
         let weight_v = vb.get((out_c, in_c, kernel_size), "weight_v")?;
         let bias = match vb.get(out_c, "bias") {
             StdOk(b) => Some(b),
             Err(_) => None,
         };
-        let weight_norm = weight_v.sqr()?.sum_keepdim(D::Minus1)?.sqrt()?;
+        let weight_norm = weight_v.sqr()?.sum_keepdim(1)?.sum_keepdim(2)?.sqrt()?;
         let normalized_weight = weight_v.broadcast_div(&weight_norm)?;
         let scaled_weight = normalized_weight.broadcast_mul(&weight_g)?;
         let conv = CausalConv1d::new(scaled_weight, bias, padding, dilation, groups, stride)?;
         Ok(Self { conv })
     }
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        println!("conv1d: x: {:?}", x);
-        println!("conv weight: : {:?}", self.conv.conv1d.weight());
         let x = self.conv.forward(x)?;
-        println!("conv1d: WN causal x: {:?}", x);
         Ok(x)
     }
 }
@@ -154,7 +134,7 @@ impl WNCausalConvTranspose1d {
             StdOk(b) => Some(b),
             Err(_) => None,
         };
-        let weight_norm = weight_v.sqr()?.sum_keepdim(D::Minus1)?.sqrt()?;
+        let weight_norm = weight_v.sqr()?.sum_keepdim(1)?.sum_keepdim(2)?.sqrt()?;
         let normalized_weight = weight_v.broadcast_div(&weight_norm)?;
         let scaled_weight = normalized_weight.broadcast_mul(&weight_g)?;
         let conv_transpose = CausalConvTranspose1d::new(
@@ -230,7 +210,6 @@ impl CausalResidualUnit {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        println!("causal residual unit x: {:?}", x);
         // let orig_dim = x.dims();
         let last_dim_x = x.dim(D::Minus1)?;
         let mut res_x = x.clone();
@@ -238,11 +217,8 @@ impl CausalResidualUnit {
         let y = self.block1.forward(&y)?;
         let y = self.block2.forward(&y)?;
         let y = self.block3.forward(&y)?;
-        println!("causal residual unit y: {:?}", y);
         // let dim = y.dims();
         let last_dim_y = y.dim(D::Minus1)?;
-        println!("last_dim_x: {:?}", last_dim_x);
-        println!("last_dim_y: {:?}", last_dim_y);
         let pad = (last_dim_x - last_dim_y) / 2;
         if pad > 0 {
             res_x = res_x.narrow(D::Minus1, pad, last_dim_y)?;
@@ -415,17 +391,11 @@ impl CausalDecoderBlock {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        println!("decoder block x : {:?}", x);
         let x = self.block0.forward(x)?;
-        println!("decoder block0 x : {:?}", x);
         let x = self.block1.forward(&x)?;
-        println!("decoder block1 x : {:?}", x);
         let x = self.block2.forward(&x)?;
-        println!("decoder block2 x : {:?}", x);
         let x = self.block3.forward(&x)?;
-        println!("decoder block3 x : {:?}", x);
         let x = self.block4.forward(&x)?;
-        println!("decoder block4 x : {:?}", x);
         Ok(x)
     }
 }
@@ -456,7 +426,7 @@ impl CausalDecoder {
             input_channel,
             1,
         )?;
-        let model1 = WNCausalConv1d::new(vb.pp("model.1"), input_channel, channels, 1, 1, 1, 1, 1)?;
+        let model1 = WNCausalConv1d::new(vb.pp("model.1"), input_channel, channels, 1, 1, 0, 1, 1)?;
         let vb_model = vb.pp("model");
         let mut output_dim = channels;
         let mut model2_5 = Vec::new();
@@ -484,10 +454,8 @@ impl CausalDecoder {
         })
     }
 
-    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
-        print!("audio_vae decoder input x shape: {:?}", x);
-        let x = self.model0.forward(x)?;
-        print!("audio_vae decoder model0 x shape: {:?}", x);
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {   
+        let x = self.model0.forward(x)?;    
         let mut x = self.model1.forward(&x)?;
         for model_i in &self.model2_5 {
             x = model_i.forward(&x)?;

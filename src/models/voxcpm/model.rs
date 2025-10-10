@@ -72,10 +72,10 @@ impl SinusoidalPosEmb {
             .to_dtype(x.dtype())?;
 
         let emb = x
-            .unsqueeze(D::Minus1)?
+            .unsqueeze(1)?
             .contiguous()?
-            .matmul(&emb.unsqueeze(0)?.contiguous()?)?
-            .affine(scale as f64, 0.0)?;
+            .affine(scale as f64, 0.0)?
+            .matmul(&emb.unsqueeze(0)?.contiguous()?)?;
         let emb = Tensor::cat(&[emb.sin()?, emb.cos()?], D::Minus1)?;
         Ok(emb)
     }
@@ -167,7 +167,7 @@ impl VoxCPMLocDiT {
         let cond = self
             .cond_proj
             .forward(&cond.transpose(1, 2)?.contiguous()?)?;
-        let prefix = cond.dims()[1];
+        let prefix = cond.dim(1)?;
         let t = self.time_embeddings.forward(t, 1000)?.to_dtype(x.dtype())?;
         let t = self.time_mlp.forward(&t)?;
         let dt = self
@@ -233,7 +233,6 @@ impl UnifiedCFM {
         let z = Tensor::randn(0.0f32, 1.0, (b, self.in_channels, t), mu.device())?
             .to_dtype(dtype)?
             .affine(temperature, 0.0)?;
-        println!("z: {}", z);
         let t_span = linspace(1.0, 0.0, n_timesteps + 1, mu.device())?.to_dtype(dtype)?;
         let t_span = t_span
             .affine(f64::consts::PI / 2.0, 0.0)?
@@ -242,11 +241,6 @@ impl UnifiedCFM {
             .add(&t_span)?
             .affine(sway_sampling_coef, 0.0)?
             .add(&t_span)?;
-        println!("t_span: {}", t_span);
-        println!("mu: {}", mu);
-        println!("cond: {}", cond);
-        println!("cfg_value: {}", cfg_value);
-        println!("use_cfg_zero_star: {}", use_cfg_zero_star);
         let x = self.solve_euler(&z, &t_span, mu, cond, cfg_value, use_cfg_zero_star)?;
         Ok(x)
     }
@@ -274,7 +268,7 @@ impl UnifiedCFM {
         let mut t = t_span.i(0)?;
         let mut dt = t.sub(&t_span.i(1)?)?;
         let mut sol = Vec::new();
-        let t_span_len = t_span.dims1()?;
+        let t_span_len = t_span.dim(0)?;
         let zero_init_steps = max(1, (t_span_len as f32 * 0.04) as usize);
         let mut dphi_dt = Tensor::zeros(1, t_span.dtype(), t_span.device())?;
         let mut x = x.clone();
@@ -320,7 +314,8 @@ impl UnifiedCFM {
                 dt = t.sub(&t_span.i(step + 1)?)?;
             }
         }
-        Ok(sol[sol.len() - 1].clone())
+        let ret = sol[sol.len() - 1].clone();
+        Ok(ret)
     }
 }
 
@@ -333,8 +328,6 @@ pub struct VoxCPMLocEnc {
 
 impl VoxCPMLocEnc {
     pub fn new(vb: VarBuilder, config: VoxMiniCPM4Config, input_dim: usize) -> Result<Self> {
-        // let special_token = Tensor::randn(0.0f32, 1.0, (1, 1, 1, config.hidden_size), vb.device())?
-        //     .to_dtype(vb.dtype())?;
         let special_token = vb.get((1, 1, 1, config.hidden_size), "special_token")?;
         let in_proj = linear(input_dim, config.hidden_size, vb.pp("in_proj"))?;
         assert_eq!(
@@ -354,16 +347,12 @@ impl VoxCPMLocEnc {
     pub fn forward(&mut self, x: &Tensor) -> Result<Tensor> {
         let (b, t, p, d) = x.dims4()?;
         let x = self.in_proj.forward(x)?;
-        println!("VoxCPMLocEnc: in_proj: {}", x);
         let special_tokens = self.special_token.expand((b, t, 1, self.hidden_size))?;
         let x = Tensor::cat(&[special_tokens, x], 2)?;
-        println!("VoxCPMLocEnc: cat: {}", x);
         let (b, t, p, c) = x.dims4()?;
         let x = x.reshape((b * t, p, c))?;
         let outputs = self.encoder.forward(&x, 0, false)?;
-        println!("VoxCPMLocEnc: encoder: {}", outputs);
         let cls_output = outputs.i((.., 0, ..))?;
-        println!("VoxCPMLocEnc: cls_output: {}", cls_output);
         let cls_output = cls_output.reshape((b, t, c))?;
         Ok(cls_output)
     }
@@ -537,10 +526,8 @@ impl VoxCPMModel {
                 let audio_feat = audio_feat
                     .reshape((self.audio_vae.latent_dim, (), self.patch_size))?
                     .permute((1, 2, 0))?;
-                let dim0 = audio_feat.dim(0)?;
-                println!("audio_feat: {:?}", audio_feat);
+                let dim0 = audio_feat.dim(0)? - 1;
                 let audio_feat = audio_feat.i(..dim0)?;
-                println!("audio_feat --: {:?}", audio_feat);
                 let audio_length = audio_feat.dim(0)?;
                 let text_pad_token = Tensor::zeros(audio_length, DType::U32, &self.device)?;
                 let text_token = Tensor::cat(&[text_token, text_pad_token], D::Minus1)?;
@@ -594,7 +581,6 @@ impl VoxCPMModel {
             .squeeze(1)?;
         let decode_audio_len = decode_audio.dim(D::Minus1)? - 640 - 640;
         let decode_audio = decode_audio.narrow(D::Minus1, 640, decode_audio_len)?;
-        println!("decode_audio: {}", decode_audio);
         Ok(decode_audio)
     }
 
@@ -609,21 +595,15 @@ impl VoxCPMModel {
         inference_timesteps: usize,
         cfg_value: f64,
     ) -> Result<Tensor> {
-        println!("text: {}", text);
-        println!("text_mask: {}", text_mask);
-        println!("feat: {}", feat);
-        println!("feat_mask: {}", feat_mask);
         let (b, t, p, d) = feat.dims4()?;
         let feat_embed = self.feat_encoder.forward(feat)?; // [b, t, h_feat]
-        println!("feat_embed: {}", feat_embed);
         let feat_embed = self.enc_to_lm_proj.forward(&feat_embed)?;
-        println!("feat_embed: {}", feat_embed);
-        
         let scale_emb = if self.config.lm_config.use_mup {
             self.config.lm_config.scale_emb
         } else {
             1.0
         };
+
         let text_embed = self
             .base_lm
             .embed_tokens
@@ -631,41 +611,32 @@ impl VoxCPMModel {
             .unwrap()
             .forward(text)?
             .affine(scale_emb as f64, 0.0)?;
-        println!("text_embed: {}", text_embed);
         let combined_embed = text_mask
             .unsqueeze(D::Minus1)?
             .broadcast_mul(&text_embed)?
             .add(&feat_mask.unsqueeze(D::Minus1)?.broadcast_mul(&feat_embed)?)?;
-        println!("combined_embed: {}", combined_embed);
-
         let mut prefix_feat_cond = feat.i((.., t - 1, ..))?;
         let mut pred_feat_seq = Vec::new();
         let mut position_id = 0;
         let mut seq_len = t;
         let enc_outputs = self.base_lm.forward_step(&combined_embed, position_id)?;
-        println!("base_lm enc_outputs: {}", enc_outputs);
         let enc_outputs = self
             .fsq_layer
             .forward(&enc_outputs)?
             .broadcast_mul(&feat_mask.unsqueeze(D::Minus1)?)?
             .add(&enc_outputs.broadcast_mul(&text_mask.unsqueeze(D::Minus1)?)?)?;
-        println!("fsq_layer enc_outputs: {}", enc_outputs);
+
         let mut lm_hidden = enc_outputs.i((.., t - 1, ..))?;
-        println!("lm_hidden shape: {:?}", lm_hidden);
-        
+
         let input_embeds =
             enc_outputs.add(&feat_mask.unsqueeze(D::Minus1)?.broadcast_mul(&feat_embed)?)?;
         let residual_enc_outputs = self.residual_lm.forward_step(&input_embeds, position_id)?;
-        println!("residual_lm residual_enc_outputs: {}", residual_enc_outputs);
         let mut residual_hidden = residual_enc_outputs.i((.., t - 1, ..))?;
 
         for i in 0..max_len {
             let dit_hidden_1 = self.lm_to_dit_proj.forward(&lm_hidden)?; // [b, h_dit]
-            println!("dit_hidden_1: {}", dit_hidden_1);
             let dit_hidden_2 = self.res_to_dit_proj.forward(&residual_hidden)?; // [b, h_dit]
-            println!("dit_hidden_2: {}", dit_hidden_2);
             let dit_hidden = dit_hidden_1.add(&dit_hidden_2)?;
-            println!("dit_hidden: {}", dit_hidden);
             let cond = prefix_feat_cond.transpose(1, 2)?.contiguous()?;
 
             let pred_feat = self
@@ -681,24 +652,18 @@ impl VoxCPMModel {
                     true,
                 )?
                 .transpose(1, 2)?; // [b, p, d]
-            println!("pred_feat: {}", pred_feat);
-
             let curr_embed = self.feat_encoder.forward(&pred_feat.unsqueeze(1)?)?; // [b, 1, c]
             let curr_embed = self.enc_to_lm_proj.forward(&curr_embed)?;
-            println!("curr_embed: {}", curr_embed);
             pred_feat_seq.push(pred_feat.unsqueeze(1)?);
 
             prefix_feat_cond = pred_feat;
-            println!("lm_hidden: {}", lm_hidden);
             let stop_flag = self.stop_proj.forward(&lm_hidden)?.silu()?;
-            println!("stop_flag: {}", stop_flag);
             let stop_flag = self
                 .stop_head
                 .forward(&stop_flag)?
                 .argmax(D::Minus1)?
                 .i(0)?
                 .to_scalar::<u32>()?;
-            println!("i: {}, stop_flag: {}", i, stop_flag);
             if i > min_len && stop_flag == 1 {
                 break;
             }
@@ -716,15 +681,12 @@ impl VoxCPMModel {
         }
         let pred_seq = Tensor::cat(&pred_feat_seq, 1)?; // (b, t, p, d)
         let (b, t, p, d) = pred_seq.dims4()?;
-        println!("pred_seq: {:?}", pred_seq);
         let feat_pred = pred_seq
             .permute((0, 3, 1, 2))?
             .reshape((b, d, ()))?
             .contiguous()?;
-        println!("feat_pred: {:?}", feat_pred);
         self.base_lm.clear_kv_cache();
         self.residual_lm.clear_kv_cache();
-
         Ok(feat_pred)
     }
 }
