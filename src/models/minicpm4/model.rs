@@ -159,7 +159,7 @@ impl MiniCPMDecoderLayer {
         Ok(xs)
     }
 
-    pub fn forward_step(
+    pub fn forward_with_cache(
         &mut self,
         xs: &Tensor,
         cos: &Tensor,
@@ -168,7 +168,7 @@ impl MiniCPMDecoderLayer {
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let xs = self.input_layernorm.forward(xs)?;
-        let xs = self.self_attn.forward_step(&xs, cos, sin, attention_mask, true)?;
+        let xs = self.self_attn.forward_with_cache(&xs, cos, sin, attention_mask, true)?;
         let xs = (residual
             + xs.affine(
                 self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
@@ -254,7 +254,7 @@ impl MiniCPMModel {
         Ok(logits)
     }
 
-    pub fn forward_step(&mut self, input_ids: &Tensor, position_id: usize) -> Result<Tensor> {
+    pub fn forward_with_cache(&mut self, input_ids: &Tensor, position_id: usize) -> Result<Tensor> {
         let (bs, seq_len) = input_ids.dims2()?;
         let input_embeds = self
             .embed_tokens
@@ -276,7 +276,7 @@ impl MiniCPMModel {
         let mut hidden_states = input_embeds;
         for decode_layer in &mut self.layers {
             hidden_states =
-                decode_layer.forward_step(&hidden_states, &cos, &sin, attention_mask)?;
+                decode_layer.forward_with_cache(&hidden_states, &cos, &sin, attention_mask)?;
         }
         hidden_states = self.norm.forward(&hidden_states)?;
         let hidden_state = hidden_states.narrow(1, seq_len - 1, 1)?;

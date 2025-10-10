@@ -223,7 +223,7 @@ pub fn masked_scatter_dim0(original: &Tensor, replace: &Tensor, mask: &Tensor) -
     let mask = mask.squeeze(0)?;
     let slices = nonzero_slice(&mask)?;
     let mut sub_start = 0usize;
-    let mut sub_end = 0usize;
+    let mut sub_end;
     for (start, end) in slices {
         sub_end = sub_start + (end - start);
         let sub_replace = replace.i((sub_start..sub_end, ..))?;

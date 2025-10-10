@@ -226,7 +226,7 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
     let samples: Vec<f32> = match spec.sample_format {
         SampleFormat::Int => {
             // 将整数样本转换为浮点数 [-1.0, 1.0]            
-            println!("spec.bits_per_sample: {}", spec.bits_per_sample);
+            // println!("spec.bits_per_sample: {}", spec.bits_per_sample);
             let samples = match spec.bits_per_sample {
                 8 => {
                     reader

@@ -66,7 +66,7 @@ impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
             None => 2048,
         };
         for _ in 0..sample_len {
-            let logits = self.minicpm.forward_step(&input_ids, seqlen_offset)?;
+            let logits = self.minicpm.forward_with_cache(&input_ids, seqlen_offset)?;
             let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
             let next_token = logit_processor.sample(&logits)?;
             generate.push(next_token);
@@ -98,7 +98,7 @@ impl<'a> GenerateModel for MiniCPMGenerateModel<'a> {
         let stream = stream! {
             let mut error_tokens = Vec::new();
             for _ in 0..sample_len {
-                let logits = self.minicpm.forward_step(
+                let logits = self.minicpm.forward_with_cache(
                     &input_ids,
                     seqlen_offset,
                 )?;

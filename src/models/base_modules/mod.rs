@@ -179,7 +179,7 @@ impl AttentionNobias {
         Ok(attn_output)
     }
 
-    pub fn forward_step(
+    pub fn forward_with_cache(
         &mut self,
         xs: &Tensor,
         cos: &Tensor,

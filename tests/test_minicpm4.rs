@@ -21,7 +21,7 @@ fn minicpm_generate() -> Result<()> {
         "messages": [
             {
                 "role": "user",
-                "content": "贾宝玉和孙悟空有什么关系"
+                "content": "你好啊，你是谁"
             }
         ]
     }

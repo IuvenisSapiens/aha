@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use candle_core::{D, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig, ConvTranspose1d, ConvTranspose1dConfig, Module, VarBuilder};
-use std::{result::Result::Ok as StdOk, thread, time};
+use std::{result::Result::Ok as StdOk};
 
 pub struct CausalConv1d {
     conv1d: Conv1d,
@@ -40,7 +40,6 @@ pub struct CausalConvTranspose1d {
     conv_transpose1d: ConvTranspose1d,
     padding: usize,
     output_padding: usize,
-    config: ConvTranspose1dConfig,
 }
 
 impl CausalConvTranspose1d {
@@ -66,7 +65,6 @@ impl CausalConvTranspose1d {
             conv_transpose1d,
             padding,
             output_padding,
-            config
         })
     }
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
@@ -468,10 +466,10 @@ impl CausalDecoder {
 }
 
 pub struct AudioVAE {
-    encoder_dim: usize,
-    encoder_rates: Vec<usize>,
-    decoder_dim: usize,
-    decoder_rates: Vec<usize>,
+    // encoder_dim: usize,
+    // encoder_rates: Vec<usize>,
+    // decoder_dim: usize,
+    // decoder_rates: Vec<usize>,
     pub latent_dim: usize,
     hop_length: usize,
     encoder: CausalEncoder,
@@ -511,10 +509,10 @@ impl AudioVAE {
         )?;
         let chunk_size = hop_length;
         Ok(Self {
-            encoder_dim,
-            encoder_rates,
-            decoder_dim,
-            decoder_rates,
+            // encoder_dim,
+            // encoder_rates,
+            // decoder_dim,
+            // decoder_rates,
             latent_dim,
             hop_length,
             encoder,

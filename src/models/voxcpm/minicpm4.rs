@@ -1,4 +1,3 @@
-use std::{thread, time};
 
 use crate::{
     models::{
@@ -10,7 +9,7 @@ use crate::{
 };
 use anyhow::{anyhow, Ok, Result};
 use candle_core::{DType, Device, Tensor, D};
-use candle_nn::{Embedding, Linear, Module, RmsNorm, VarBuilder, embedding, rms_norm};
+use candle_nn::{Embedding, Module, RmsNorm, VarBuilder, embedding, rms_norm};
 
 pub struct MiniCPMLongRoPE {
     short_factor: Vec<f32>,
@@ -177,7 +176,7 @@ impl MiniCPMDecoderLayer {
         Ok(xs)
     }
 
-    pub fn forward_step(
+    pub fn forward_with_cache(
         &mut self,
         xs: &Tensor,
         cos: &Tensor,
@@ -188,7 +187,7 @@ impl MiniCPMDecoderLayer {
         let xs = self.input_layernorm.forward(xs)?;
         let xs = self
             .self_attn
-            .forward_step(&xs, cos, sin, attention_mask, true)?;
+            .forward_with_cache(&xs, cos, sin, attention_mask, true)?;
         let xs = if self.use_mup {
             let res_add = (residual
                 + xs.affine(
@@ -221,12 +220,11 @@ impl MiniCPMDecoderLayer {
 }
 
 pub struct MiniCPMModel {
-    cfg: VoxMiniCPM4Config,
+    // cfg: VoxMiniCPM4Config,
     pub embed_tokens: Option<Embedding>,
     layers: Vec<MiniCPMDecoderLayer>,
     norm: RmsNorm,
     rope_emb: MiniCPMLongRoPE,
-    // lm_head: Linear,
 }
 
 impl MiniCPMModel {
@@ -250,23 +248,17 @@ impl MiniCPMModel {
         }
         let norm = rms_norm(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("norm"))?;
         let rope_emb = MiniCPMLongRoPE::new(&cfg, vb.device(), vb.dtype())?;
-        // let lm_head = Linear::new(embed_tokens.embeddings().clone(), None);
         Ok(Self {
-            cfg,
+            // cfg,
             embed_tokens,
             layers,
             norm,
             rope_emb,
-            // lm_head,
         })
     }
 
     pub fn forward(&mut self, input_embeds: &Tensor, position_id: usize, is_causal: bool) -> Result<Tensor> {
         let (bs, seq_len, _) = input_embeds.dims3()?;
-        // let input_embeds = self
-        //     .embed_tokens
-        //     .forward(&input_ids)?
-        //     .affine(self.cfg.scale_emb, 0.0)?;
         let attention_mask: Option<&Tensor> = {
             if !is_causal || seq_len <= 1 {
                 None
@@ -288,17 +280,13 @@ impl MiniCPMModel {
         Ok(hidden_states)
     }
 
-    pub fn forward_step(&mut self, input_embeds: &Tensor, position_id: usize) -> Result<Tensor> {
+    pub fn forward_with_cache(&mut self, input_embeds: &Tensor, position_id: usize) -> Result<Tensor> {
         let input_embeds = match input_embeds.rank() {
             2 => input_embeds.unsqueeze(1)?,
             3 => input_embeds.clone(),
             _ => return Err(anyhow!("MiniCPMModelinput_embeds illigal"))
         };
         let (bs, seq_len, _) = input_embeds.dims3()?;
-        // let input_embeds = self
-        //     .embed_tokens
-        //     .forward(&input_ids)?
-        //     .affine(self.cfg.scale_emb, 0.0)?;
         let attention_mask: Option<&Tensor> = {
             if seq_len <= 1 {
                 None
@@ -315,7 +303,7 @@ impl MiniCPMModel {
         let mut hidden_states = input_embeds.clone();
         for decode_layer in &mut self.layers {
             hidden_states =
-                decode_layer.forward_step(&hidden_states, &cos, &sin, attention_mask)?;
+                decode_layer.forward_with_cache(&hidden_states, &cos, &sin, attention_mask)?;
         }
         hidden_states = self.norm.forward(&hidden_states)?;
 
