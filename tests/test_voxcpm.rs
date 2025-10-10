@@ -1,18 +1,14 @@
 use anyhow::{Ok, Result};
-use std::{collections::HashMap, time::Instant};
+use std::{time::Instant};
 
 use aha::{
-    models::voxcpm::{
-        audio_vae::AudioVAE, config::VoxCPMConfig, generate::VoxCPMGenerate, model::VoxCPMModel,
+    models::voxcpm::{ generate::VoxCPMGenerate,
         tokenizer::SingleChineseTokenizer,
     },
     utils::{
         audio_utils::save_wav,
-        utils::{find_type_files, get_device},
     },
 };
-use candle_core::pickle::read_all_with_key;
-use candle_nn::VarBuilder;
 
 #[test]
 fn voxcpm_generate() -> Result<()> {

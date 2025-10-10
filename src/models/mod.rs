@@ -1,4 +1,4 @@
-pub mod base_modules;
+pub mod common;
 pub mod minicpm4;
 pub mod qwen2_5vl;
 pub mod voxcpm;

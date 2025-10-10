@@ -1,6 +1,6 @@
 use crate::{
     models::{
-        base_modules::{AttentionNobias, MLPNoBias},
+        common::{AttentionNobias, MLPNoBias},
         minicpm4::config::MiniCPM4Config,
     },
     position_embed::rope::compute_default_rope_parameters,
@@ -155,7 +155,7 @@ impl MiniCPMDecoderLayer {
             + xs.affine(
                 self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                 0.0,
-            ))?;
+            )?)?;
         Ok(xs)
     }
 
@@ -180,7 +180,7 @@ impl MiniCPMDecoderLayer {
             + xs.affine(
                 self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                 0.0,
-            ))?;
+            )?)?;
         Ok(xs)
     }
     pub fn clear_kv_cache(&mut self) {
