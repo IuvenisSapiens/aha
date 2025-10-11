@@ -23,7 +23,7 @@ impl VoxCPMGenerate {
         let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
         let cfg_dtype = config.dtype.as_str();
         let model_list = find_type_files(path, "pth")?;
-        println!(" pth model_list: {:?}", model_list);
+        // println!(" pth model_list: {:?}", model_list);
         let mut dict_to_hashmap = HashMap::new();
         let mut vae_dtype = candle_core::DType::F32;
         for m in model_list {
@@ -46,7 +46,7 @@ impl VoxCPMGenerate {
         )?;
 
         let model_list = find_type_files(path, "bin")?;
-        println!(" bin model_list: {:?}", model_list);
+        // println!(" bin model_list: {:?}", model_list);
         dict_to_hashmap = HashMap::new();
         let mut m_dtype = get_dtype(dtype, cfg_dtype);
         for m in model_list {

@@ -3,7 +3,7 @@
 
 ## 特性
 * 🚀 高性能推理 - 基于 Candle 框架，提供高效的张量计算和模型推理
-* 🎯 多模型支持 - 集成视觉、语言和多模态模型
+* 🎯 多模型支持 - 集成视觉、语言和语音多模态模型
 * 🔧 易于使用 - 简洁的 API 设计，快速上手
 * 🛡️ 内存安全 - 得益于 Rust 的所有权系统，确保内存安全
 * 📦 轻量级 - 最小化依赖，编译产物小巧
@@ -28,10 +28,10 @@
 aha = { git = "https://github.com/jhqxxx/aha.git" }
 
 # 启用 CUDA 支持（可选）
-candle-inference = { git = "https://github.com/jhqxxx/aha.git", features = ["cuda"] }
+aha = { git = "https://github.com/jhqxxx/aha.git", features = ["cuda"] }
 
 # 启用Flash Attention 支持（可选）
-candle-inference = { git = "https://github.com/your-username/your-repo.git", features = ["cuda", "flash-attn"] }
+aha = { git = "https://github.com/jhqxxx/aha.git", features = ["cuda", "flash-attn"] }
 ```
 
 ### 从源码构建运行测试
@@ -48,6 +48,36 @@ cargo test -F cuda,flash-attn minicpm_generate -- --nocapture
 # 运行 VoxCPM 示例
 cargo test -F cuda,flash-attn voxcpm_generate -- --nocapture
 ```
+
+## 使用方法
+### VoxCPM示例
+```rust
+use aha::models::voxcpm::generate::VoxCPMGenerate;
+use aha::utils::audio_utils::save_wav;
+use anyhow::Result;
+
+fn main() -> Result<()> {
+    let model_path = "xxx/openbmb/VoxCPM-0.5B/";
+    
+    let mut voxcpm_generate = VoxCPMGenerate::init(model_path, None, None)?;
+    
+    let generate = voxcpm_generate.generate(
+        "太阳当空照，花儿对我笑，小鸟说早早早".to_string(),
+        None,
+        None,
+        2,
+        100,
+        10,
+        2.0,
+        false,
+        6.0,
+    )?;
+
+    let _ = save_wav(&generate, "voxcpm.wav")?;
+    Ok(())
+}
+```
+
 
 ## 开发
 ### 项目结构
