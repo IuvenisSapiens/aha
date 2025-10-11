@@ -19,9 +19,7 @@ pub struct VoxCPMGenerate {
 impl VoxCPMGenerate {
     pub fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
         let device = &get_device(device);
-        let config_path = path.to_string() + "/config.json";
-        let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
-        let cfg_dtype = config.dtype.as_str();
+        
         let model_list = find_type_files(path, "pth")?;
         // println!(" pth model_list: {:?}", model_list);
         let mut dict_to_hashmap = HashMap::new();
@@ -48,18 +46,19 @@ impl VoxCPMGenerate {
         let model_list = find_type_files(path, "bin")?;
         // println!(" bin model_list: {:?}", model_list);
         dict_to_hashmap = HashMap::new();
+        let config_path = path.to_string() + "/config.json";
+        let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
+        let cfg_dtype = config.dtype.as_str();
         let mut m_dtype = get_dtype(dtype, cfg_dtype);
         for m in model_list {
             let dict = read_all_with_key(m, Some("state_dict"))?;
-            m_dtype = dict[0].1.dtype();
             for (k, v) in dict {
                 // println!("key: {}, tensor shape: {:?}", k, v);
                 dict_to_hashmap.insert(k, v);
             }
         }
+        // println!("model dtype: {:?}", m_dtype);
         let vb_voxcpm = VarBuilder::from_tensors(dict_to_hashmap, m_dtype, device);
-        let config_path = path.to_string() + "/config.json";
-        let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
         let tokenizer = SingleChineseTokenizer::new(path)?;
         let voxcpm = VoxCPMModel::new(vb_voxcpm, config, tokenizer, audio_vae)?;
 

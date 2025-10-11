@@ -585,7 +585,7 @@ impl VoxCPMModel {
     ) -> Result<Tensor> {
         let text_token = text_token.unsqueeze(0)?;
         let text_mask = text_mask.unsqueeze(0)?;
-        let audio_feat = audio_feat.unsqueeze(0)?.to_dtype(DType::BF16)?;
+        let audio_feat = audio_feat.unsqueeze(0)?.to_dtype(self.dtype)?;
         let audio_mask = audio_mask.unsqueeze(0)?;
 
         let latent_pred = self.inference(
