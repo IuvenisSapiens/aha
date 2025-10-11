@@ -40,13 +40,13 @@ git clone https://github.com/jhqxxx/aha.git
 cd aha
 # 修改测试用例中模型路径
 # 运行 Qwen2.5VL 示例
-cargo test -F cuda,flash-attn qwen2_5vl_generate -- --nocapture
+cargo test -F cuda qwen2_5vl_generate -- --nocapture
 
 # 运行 MiniCPM4 示例  
-cargo test -F cuda,flash-attn minicpm_generate -- --nocapture
+cargo test -F cuda minicpm_generate -- --nocapture
 
 # 运行 VoxCPM 示例
-cargo test -F cuda,flash-attn voxcpm_generate -- --nocapture
+cargo test -F cuda voxcpm_generate -- --nocapture
 ```
 
 ## 使用方法
