@@ -130,7 +130,7 @@ impl VoxCPMGenerate {
         Ok(audio)
     }
     pub fn generate_simple(&mut self, target_text: String) -> Result<Tensor> {
-        let audio = self.generate(target_text, None, None, 2, 1000, 10, 2.0, false, 6.0)?;
+        let audio = self.generate(target_text, None, None, 2, 100, 10, 2.0, false, 6.0)?;
         Ok(audio)
     }
     pub fn generate(

@@ -233,7 +233,7 @@ impl MiniCPMModel {
                 Some(&prepare_causal_attention_mask(
                     bs,
                     seq_len,
-                    position_id,
+                    0,
                     input_ids.device(),
                 )?)
             }
@@ -267,7 +267,7 @@ impl MiniCPMModel {
                 Some(&prepare_causal_attention_mask(
                     bs,
                     seq_len,
-                    position_id,
+                    0,
                     input_ids.device(),
                 )?)
             }

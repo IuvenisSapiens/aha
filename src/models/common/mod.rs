@@ -146,7 +146,7 @@ impl AttentionNobias {
                 let attn_weights = (attn_weights * scale)?;
                 let attn_weights = match attention_mask {
                     None => attn_weights,
-                    Some(mask) => attn_weights.broadcast_add(mask)?,
+                    Some(mask) => attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?,
                 };
                 let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
                 let attn_weights = attn_weights.matmul(&value_states)?;

@@ -21,7 +21,7 @@ fn minicpm_generate() -> Result<()> {
         "messages": [
             {
                 "role": "user",
-                "content": "你好啊，你是谁"
+                "content": "你吃饭了没"
             }
         ]
     }
