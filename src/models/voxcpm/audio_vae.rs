@@ -453,7 +453,7 @@ impl CausalDecoder {
     }
 
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {   
-        let x = self.model0.forward(x)?;    
+        let x = self.model0.forward(x)?;  
         let mut x = self.model1.forward(&x)?;
         for model_i in &self.model2_5 {
             x = model_i.forward(&x)?;

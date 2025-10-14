@@ -1,9 +1,8 @@
 use anyhow::{Result, anyhow};
-use candle_core::{D, DType, Device, Tensor};
-use candle_nn::{Conv1d, Conv1dConfig, Module, conv1d_no_bias};
+use candle_core::{D, Device, Tensor};
+use candle_nn::{Conv1d, Conv1dConfig, Module};
 use hound::{SampleFormat, WavReader};
-use rocket::futures::future::ok;
-
+use num::integer::gcd;
 use std::f64::consts::PI;
 use std::path::Path;
 
@@ -14,10 +13,6 @@ pub enum ResamplingMethod {
     SincInterpKaiser,
 }
 
-// 计算最大公约数
-fn gcd(a: i64, b: i64) -> i64 {
-    if b == 0 { a } else { gcd(b, a % b) }
-}
 
 // 零阶修正贝塞尔函数 I0
 fn i0(x: f32) -> f32 {
@@ -65,12 +60,12 @@ pub fn get_sinc_resample_kernel(
 
     let width_f = (lowpass_filter_width as f64) * (orig_freq as f64) / base_freq;
     let width = width_f.ceil() as i64;
-    // 创建索引数组 [1, 1, 2*width + orig_freq_reduced]
+    // 创建索引数组 [1, 1, 2*width + orig_freq]
     let idx = Tensor::arange(-width as f32, (width + orig_freq) as f32, device)?
         .affine(1.0 / orig_freq as f64, 0.0)?
         .unsqueeze(0)?
         .unsqueeze(0)?;
-    // 创建时间数组 t [new_freq_reduced, 1, idx_len]
+    // 创建时间数组 t [new_freq, 1, idx_len]
     let t = Tensor::arange_step(0.0, -new_freq as f32, -1.0, device)?
         .affine(1.0 / new_freq as f64, 0.0)?
         .unsqueeze(D::Minus1)?
@@ -270,7 +265,6 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
         &device,
     )?
     .t()?;
-    // println!("audio channels: {}", spec.channels);
     if spec.channels > 1 {
         // 对channel通道求平均， channel维度变为1
         audio_tensor = audio_tensor.mean_keepdim(0)?;

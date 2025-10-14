@@ -203,9 +203,9 @@ impl UnifiedCFM {
         estimator: VoxCPMLocDiT,
         mean_mode: bool,
     ) -> Result<Self> {
-        let solver = cfm_params.solver;
-        let sigma_min = cfm_params.sigma_min;
-        let t_scheduler = cfm_params.t_scheduler;
+        // let solver = cfm_params.solver;
+        // let sigma_min = cfm_params.sigma_min;
+        // let t_scheduler = cfm_params.t_scheduler;
         Ok(Self {
             // solver,
             // sigma_min,
@@ -305,9 +305,9 @@ impl UnifiedCFM {
                     st_star = st_star.reshape(vec_shape)?;
                 }
                 let cfg = cfg_dphi_dt.broadcast_mul(&st_star)?;
-                dphi_dt = cfg.add(&dphi_dt.sub(&cfg)?.affine(cfg_value, 0.0)?)?;
+                dphi_dt = cfg.add(&dphi_dt.sub(&cfg)?.affine(cfg_value, 0.0)?)?; // step步的预测噪声
             }
-            x = x.broadcast_sub(&dphi_dt.broadcast_mul(&dt)?)?;
+            x = x.broadcast_sub(&dphi_dt.broadcast_mul(&dt)?)?;  // 逐步去噪
             t = t.sub(&dt)?;
             sol.push(x.clone());
             if step < t_span_len - 1 {
@@ -598,10 +598,12 @@ impl VoxCPMModel {
             inference_timesteps,
             cfg_value,
         )?;
+        println!("laten_pred: {}", latent_pred);
         let decode_audio = self
             .audio_vae
             .decode(&latent_pred.to_dtype(DType::F32)?)?
             .squeeze(1)?;
+        println!("decode_audio: {}", decode_audio);
         let decode_audio_len = decode_audio.dim(D::Minus1)? - 640 - 640;
         let decode_audio = decode_audio.narrow(D::Minus1, 640, decode_audio_len)?;
         Ok(decode_audio)
@@ -661,7 +663,6 @@ impl VoxCPMModel {
             let dit_hidden_2 = self.res_to_dit_proj.forward(&residual_hidden)?; // [b, h_dit]
             let dit_hidden = dit_hidden_1.add(&dit_hidden_2)?;
             let cond = prefix_feat_cond.transpose(1, 2)?.contiguous()?;
-
             let pred_feat = self
                 .feat_decoder
                 .forward(

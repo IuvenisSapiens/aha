@@ -1,5 +1,4 @@
 use anyhow::{Ok, Result, anyhow};
-use candle_core::Tensor;
 use tokenizers::Tokenizer;
 
 pub struct SingleChineseTokenizer {
@@ -48,7 +47,7 @@ impl SingleChineseTokenizer {
         // println!("tokens: {:?}", tokens);
         let mut split_character = Vec::new();
         for token in tokens {
-            let clean_token = token.replace("▁", "to");
+            let clean_token = token.replace("▁", "");
             if self.multichar_tokens.contains(&clean_token) {
                 let chars: Vec<String> = clean_token.chars().map(|c| c.to_string()).collect();
                 split_character.extend(chars);

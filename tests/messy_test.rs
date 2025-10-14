@@ -1,6 +1,5 @@
 use aha::utils::audio_utils::{load_audio_with_resample};
 use anyhow::Result;
-use candle_core::Tensor;
 
 #[test]
 fn messy_test() -> Result<()> {
