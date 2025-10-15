@@ -28,6 +28,11 @@ jobs:
       - name: Setup toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - name: Install FFmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          
       - run: make lint
 
   build-and-test:
@@ -38,11 +43,6 @@ jobs:
 
       - name: Setup toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Install FFmpeg dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
 
       - name: Build
         run: make build
