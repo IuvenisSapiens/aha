@@ -72,7 +72,7 @@ async fn qwen2_5vl_stream() -> Result<()> {
                         "type": "image",
                         "image_url": 
                         {
-                            "url": "file://./assets/img/ocr_test.png"
+                            "url": "file://./assets/img/ocr_test1.png"
                         }
                     },               
                     {

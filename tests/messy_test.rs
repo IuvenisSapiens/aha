@@ -4,7 +4,7 @@ use anyhow::Result;
 #[test]
 fn messy_test() -> Result<()> {
     let device = candle_core::Device::Cpu;
-    let wav_path = "./assets/audio/example.wav";
+    let wav_path = "./assets/audio/voice_01.wav";
     let audio_tensor = load_audio_with_resample(wav_path, device, Some(16000))?;
 
     println!("audio_tensor: {}", audio_tensor);
