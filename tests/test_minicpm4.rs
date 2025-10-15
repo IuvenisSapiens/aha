@@ -1,8 +1,7 @@
 use std::{pin::pin, time::Instant};
 
-use aha::models::{minicpm4::generate::MiniCPMGenerateModel, GenerateModel};
+use aha::models::{GenerateModel, minicpm4::generate::MiniCPMGenerateModel};
 use anyhow::Result;
-use candle_core::{DType, Device};
 use openai_dive::v1::resources::chat::ChatCompletionParameters;
 use rocket::futures::StreamExt;
 
@@ -11,7 +10,7 @@ fn minicpm_generate() -> Result<()> {
     // test with cpu :(太慢了, : RUST_BACKTRACE=1 cargo test minicpm_generate -- --nocapture
     // test with cuda: RUST_BACKTRACE=1 cargo test -F cuda minicpm_generate -- --nocapture
     // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn minicpm_generate -- --nocapture
-    
+
     let model_path = "/home/jhq/huggingface_model/OpenBMB/MiniCPM4-0.5B/";
     let message = r#"
     {
@@ -44,7 +43,7 @@ fn minicpm_generate() -> Result<()> {
 #[tokio::test]
 async fn minicpm_stream() -> Result<()> {
     // test with cuda+flash-attn: RUST_BACKTRACE=1 cargo test -F cuda,flash-attn minicpm_stream -- --nocapture
-    
+
     let model_path = "/home/jhq/huggingface_model/OpenBMB/MiniCPM4-0.5B/";
 
     let message = r#"

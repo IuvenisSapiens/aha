@@ -7,7 +7,7 @@ use candle_transformers::models::deepseek2::SplitOp;
 
 use crate::{
     models::voxcpm::{
-        audio_vae::{AudioVAE},
+        audio_vae::AudioVAE,
         config::{CfmConfig, VoxCPMConfig, VoxMiniCPM4Config},
         minicpm4::MiniCPMModel,
         tokenizer::SingleChineseTokenizer,
@@ -67,7 +67,7 @@ impl SinusoidalPosEmb {
         let half_dim = self.dim / 2;
         let dif = 10000.0_f64.ln() / (half_dim - 1) as f64;
         let emb = Tensor::arange(0.0, half_dim as f32, x.device())?
-            .affine(-1.0 * dif, 0.0)?
+            .affine(-dif, 0.0)?
             .exp()?
             .to_dtype(x.dtype())?;
 
@@ -94,8 +94,8 @@ impl TimestepEmbedding {
         out_dim: Option<usize>,
     ) -> Result<Self> {
         let linear_1 = linear(in_channels, time_embed_dim, vb.pp("linear_1"))?;
-        let time_embed_dim_out = if out_dim.is_some() {
-            out_dim.unwrap()
+        let time_embed_dim_out = if let Some(out_dim) = out_dim {
+            out_dim
         } else {
             time_embed_dim
         };
@@ -104,7 +104,7 @@ impl TimestepEmbedding {
     }
 
     pub fn forward(&self, sample: &Tensor) -> Result<Tensor> {
-        let sample = self.linear_1.forward(&sample)?.silu()?;
+        let sample = self.linear_1.forward(sample)?.silu()?;
         let sample = self.linear_2.forward(&sample)?;
         Ok(sample)
     }
@@ -199,7 +199,7 @@ pub struct UnifiedCFM {
 impl UnifiedCFM {
     pub fn new(
         in_channels: usize,
-        cfm_params: CfmConfig,
+        _cfm_params: CfmConfig,
         estimator: VoxCPMLocDiT,
         mean_mode: bool,
     ) -> Result<Self> {
@@ -270,7 +270,7 @@ impl UnifiedCFM {
         let mut sol = Vec::new();
         let t_span_len = t_span.dim(0)?;
         let zero_init_steps = max(1, (t_span_len as f32 * 0.04) as usize);
-        let mut dphi_dt = Tensor::zeros(1, t_span.dtype(), t_span.device())?;
+        let mut dphi_dt;
         let mut x = x.clone();
         for step in 1..t_span_len {
             if use_cfg_zero_star && step <= zero_init_steps {
@@ -307,7 +307,7 @@ impl UnifiedCFM {
                 let cfg = cfg_dphi_dt.broadcast_mul(&st_star)?;
                 dphi_dt = cfg.add(&dphi_dt.sub(&cfg)?.affine(cfg_value, 0.0)?)?; // step步的预测噪声
             }
-            x = x.broadcast_sub(&dphi_dt.broadcast_mul(&dt)?)?;  // 逐步去噪
+            x = x.broadcast_sub(&dphi_dt.broadcast_mul(&dt)?)?; // 逐步去噪
             t = t.sub(&dt)?;
             sol.push(x.clone());
             if step < t_span_len - 1 {
@@ -642,7 +642,9 @@ impl VoxCPMModel {
         let mut pred_feat_seq = Vec::new();
         let mut position_id = 0;
         let mut seq_len = t;
-        let enc_outputs = self.base_lm.forward_with_cache(&combined_embed, position_id)?;
+        let enc_outputs = self
+            .base_lm
+            .forward_with_cache(&combined_embed, position_id)?;
         let enc_outputs = self
             .fsq_layer
             .forward(&enc_outputs)?
@@ -653,7 +655,9 @@ impl VoxCPMModel {
 
         let input_embeds =
             enc_outputs.add(&feat_mask.unsqueeze(D::Minus1)?.broadcast_mul(&feat_embed)?)?;
-        let residual_enc_outputs = self.residual_lm.forward_with_cache(&input_embeds, position_id)?;
+        let residual_enc_outputs = self
+            .residual_lm
+            .forward_with_cache(&input_embeds, position_id)?;
         let mut residual_hidden = residual_enc_outputs.i((.., t - 1, ..))?;
 
         for i in 0..max_len {

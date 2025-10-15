@@ -1,10 +1,7 @@
 use std::{pin::pin, time::Instant};
 
-use aha::{
-    models::{GenerateModel, qwen2_5vl::generate::Qwen2_5VLGenerateModel},
-};
+use aha::models::{GenerateModel, qwen2_5vl::generate::Qwen2_5VLGenerateModel};
 use anyhow::Result;
-use candle_core::{DType, Device};
 use openai_dive::v1::resources::chat::ChatCompletionParameters;
 use rocket::futures::StreamExt;
 

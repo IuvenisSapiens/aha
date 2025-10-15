@@ -1,5 +1,5 @@
 use anyhow::Result;
-use candle_core::{Tensor, D};
+use candle_core::{D, Tensor};
 use candle_nn::{Activation, Linear, Module, VarBuilder, linear, linear_no_bias};
 
 use crate::{position_embed::rope::apply_rotary_pos_emb, utils::tensor_utils::repeat_kv};
@@ -89,7 +89,12 @@ pub struct AttentionNobias {
 }
 
 impl AttentionNobias {
-    pub fn new(vb: VarBuilder, hidden_size: usize, num_attention_heads: usize, num_key_value_heads: usize) -> Result<Self> {
+    pub fn new(
+        vb: VarBuilder,
+        hidden_size: usize,
+        num_attention_heads: usize,
+        num_key_value_heads: usize,
+    ) -> Result<Self> {
         let num_kv_groups = num_attention_heads / num_key_value_heads;
         let head_dim = hidden_size / num_attention_heads;
         let q_proj = linear_no_bias(hidden_size, num_attention_heads * head_dim, vb.pp("q_proj"))?;
@@ -146,11 +151,12 @@ impl AttentionNobias {
                 let attn_weights = (attn_weights * scale)?;
                 let attn_weights = match attention_mask {
                     None => attn_weights,
-                    Some(mask) => attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?,
+                    Some(mask) => {
+                        attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?
+                    }
                 };
                 let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
-                let attn_weights = attn_weights.matmul(&value_states)?;
-                attn_weights
+                attn_weights.matmul(&value_states)?
             }
             #[cfg(feature = "flash-attn")]
             {
@@ -225,11 +231,12 @@ impl AttentionNobias {
                 let attn_weights = (attn_weights * scale)?;
                 let attn_weights = match attention_mask {
                     None => attn_weights,
-                    Some(mask) => attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?,
+                    Some(mask) => {
+                        attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?
+                    }
                 };
                 let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
-                let attn_weights = attn_weights.matmul(&value_states)?;
-                attn_weights
+                attn_weights.matmul(&value_states)?
             }
             #[cfg(feature = "flash-attn")]
             {

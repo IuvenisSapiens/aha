@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct VoxRopeScalingConfig {
     pub r#type: String,
@@ -21,7 +20,7 @@ pub struct VoxMiniCPM4Config {
     pub rope_theta: f32,
     pub rope_scaling: VoxRopeScalingConfig,
     pub vocab_size: usize,
-    pub scale_emb:f32,
+    pub scale_emb: f32,
     pub dim_model_base: usize,
     pub scale_depth: f32,
     pub use_mup: bool,

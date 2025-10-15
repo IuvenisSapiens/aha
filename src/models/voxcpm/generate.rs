@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
+use anyhow::{Ok, Result};
+use candle_core::{DType, Device, Tensor, pickle::read_all_with_key};
+use candle_nn::VarBuilder;
+
 use crate::{
     models::voxcpm::{
         audio_vae::AudioVAE, config::VoxCPMConfig, model::VoxCPMModel,
         tokenizer::SingleChineseTokenizer,
     },
-    utils::utils::{find_type_files, get_device, get_dtype},
+    utils::{find_type_files, get_device, get_dtype},
 };
-use anyhow::{Ok, Result};
-use candle_core::{DType, Device, Tensor, pickle::read_all_with_key};
-use candle_nn::VarBuilder;
 
 pub struct VoxCPMGenerate {
     voxcpm: VoxCPMModel,
@@ -19,7 +20,7 @@ pub struct VoxCPMGenerate {
 impl VoxCPMGenerate {
     pub fn init(path: &str, device: Option<&Device>, dtype: Option<DType>) -> Result<Self> {
         let device = &get_device(device);
-        
+
         let model_list = find_type_files(path, "pth")?;
         // println!(" pth model_list: {:?}", model_list);
         let mut dict_to_hashmap = HashMap::new();
@@ -32,7 +33,7 @@ impl VoxCPMGenerate {
                 dict_to_hashmap.insert(k, v);
             }
         }
-        let vb_vae = VarBuilder::from_tensors(dict_to_hashmap, vae_dtype, &device);
+        let vb_vae = VarBuilder::from_tensors(dict_to_hashmap, vae_dtype, device);
         let audio_vae = AudioVAE::new(
             vb_vae,
             128,
@@ -49,7 +50,7 @@ impl VoxCPMGenerate {
         let config_path = path.to_string() + "/config.json";
         let config: VoxCPMConfig = serde_json::from_slice(&std::fs::read(config_path)?)?;
         let cfg_dtype = config.dtype.as_str();
-        let mut m_dtype = get_dtype(dtype, cfg_dtype);
+        let m_dtype = get_dtype(dtype, cfg_dtype);
         for m in model_list {
             let dict = read_all_with_key(m, Some("state_dict"))?;
             for (k, v) in dict {

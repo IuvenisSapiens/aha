@@ -1,3 +1,6 @@
+use anyhow::{Ok, Result, anyhow};
+use candle_core::{D, DType, Device, Tensor};
+use candle_nn::{Embedding, Module, RmsNorm, VarBuilder, embedding, rms_norm};
 
 use crate::{
     models::{
@@ -7,9 +10,6 @@ use crate::{
     position_embed::rope::compute_default_rope_parameters,
     utils::tensor_utils::prepare_causal_attention_mask,
 };
-use anyhow::{anyhow, Ok, Result};
-use candle_core::{DType, Device, Tensor, D};
-use candle_nn::{Embedding, Module, RmsNorm, VarBuilder, embedding, rms_norm};
 
 pub struct MiniCPMLongRoPE {
     short_factor: Vec<f32>,
@@ -77,15 +77,21 @@ impl MiniCPMLongRoPE {
         let ext_factors = Tensor::ones_like(&ext_factors)?.div(&ext_factors)?;
         let freqs = t.matmul(&ext_factors)?.broadcast_mul(&self.inv_freq)?;
         let emb = Tensor::cat(&[&freqs, &freqs], D::Minus1)?;
-        let cos_cached = emb.cos()?.affine(self.scaling_factor, 0.0)?.to_dtype(self.dtype)?;
-        let sin_cached = emb.sin()?.affine(self.scaling_factor, 0.0)?.to_dtype(self.dtype)?;
+        let cos_cached = emb
+            .cos()?
+            .affine(self.scaling_factor, 0.0)?
+            .to_dtype(self.dtype)?;
+        let sin_cached = emb
+            .sin()?
+            .affine(self.scaling_factor, 0.0)?
+            .to_dtype(self.dtype)?;
         self.cos_cached = cos_cached;
         self.sin_cached = sin_cached;
         Ok(())
     }
     pub fn forward(&mut self, pos_offset: usize, seqlen: usize) -> Result<(Tensor, Tensor)> {
         if pos_offset + seqlen > self.max_seq_len_cached {
-            let _ = self.update_cos_sin_cache(pos_offset + seqlen)?;
+            self.update_cos_sin_cache(pos_offset + seqlen)?;
         }
         let cos = self.cos_cached.narrow(0, pos_offset, seqlen)?;
         let sin = self.sin_cached.narrow(0, pos_offset, seqlen)?;
@@ -149,29 +155,25 @@ impl MiniCPMDecoderLayer {
             .self_attn
             .forward(&xs, cos, sin, attention_mask, true)?;
         let xs = if self.use_mup {
-            let res_add = (residual
+            (residual
                 + xs.affine(
                     self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                     0.0,
-                ))?;
-            res_add
+                ))?
         } else {
-            let res_add = (residual + xs)?;
-            res_add
+            (residual + xs)?
         };
         let residual = xs.clone();
         let xs = xs.apply(&self.post_attention_layernorm)?;
         let xs = xs.apply(&self.mlp)?;
         let xs = if self.use_mup {
-            let res_add = (residual
+            (residual
                 + xs.affine(
                     self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                     0.0,
-                ))?;
-            res_add
+                ))?
         } else {
-            let res_add = (residual + xs)?;
-            res_add
+            (residual + xs)?
         };
         Ok(xs)
     }
@@ -189,28 +191,24 @@ impl MiniCPMDecoderLayer {
             .self_attn
             .forward_with_cache(&xs, cos, sin, attention_mask, true)?;
         let xs = if self.use_mup {
-            let res_add = (residual
+            (residual
                 + xs.affine(
                     self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                     0.0,
-                )?)?;
-            res_add
+                )?)?
         } else {
-            let res_add = (residual + xs)?;
-            res_add
+            (residual + xs)?
         };
         let residual = &xs;
         let xs = xs.apply(&self.post_attention_layernorm)?.apply(&self.mlp)?;
         let xs = if self.use_mup {
-            let res_add = (residual
+            (residual
                 + xs.affine(
                     self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
                     0.0,
-                )?)?;
-            res_add
+                )?)?
         } else {
-            let res_add = (residual + xs)?;
-            res_add
+            (residual + xs)?
         };
         Ok(xs)
     }
@@ -257,7 +255,12 @@ impl MiniCPMModel {
         })
     }
 
-    pub fn forward(&mut self, input_embeds: &Tensor, position_id: usize, is_causal: bool) -> Result<Tensor> {
+    pub fn forward(
+        &mut self,
+        input_embeds: &Tensor,
+        position_id: usize,
+        is_causal: bool,
+    ) -> Result<Tensor> {
         let (bs, seq_len, _) = input_embeds.dims3()?;
         let attention_mask: Option<&Tensor> = {
             if !is_causal || seq_len <= 1 {
@@ -280,11 +283,15 @@ impl MiniCPMModel {
         Ok(hidden_states)
     }
 
-    pub fn forward_with_cache(&mut self, input_embeds: &Tensor, position_id: usize) -> Result<Tensor> {
+    pub fn forward_with_cache(
+        &mut self,
+        input_embeds: &Tensor,
+        position_id: usize,
+    ) -> Result<Tensor> {
         let input_embeds = match input_embeds.rank() {
             2 => input_embeds.unsqueeze(1)?,
             3 => input_embeds.clone(),
-            _ => return Err(anyhow!("MiniCPMModelinput_embeds illigal"))
+            _ => return Err(anyhow!("MiniCPMModelinput_embeds illigal")),
         };
         let (bs, seq_len, _) = input_embeds.dims3()?;
         let attention_mask: Option<&Tensor> = {

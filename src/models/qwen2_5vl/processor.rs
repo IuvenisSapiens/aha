@@ -13,7 +13,7 @@ use crate::{
     models::qwen2_5vl::config::VisionSetting,
     utils::{
         img_utils::get_image,
-        utils::{ceil_by_factor, floor_by_factor, round_by_factor},
+        {ceil_by_factor, floor_by_factor, round_by_factor},
     },
 };
 
@@ -63,22 +63,15 @@ impl Qwen2_5VLProcessor {
         vision_map.insert("image".to_string(), Vec::new());
         vision_map.insert("video".to_string(), Vec::new());
         for chat_mes in mes.messages.clone() {
-            match chat_mes {
-                ChatMessage::User { content, name } => match content {
-                    ChatMessageContent::ContentPart(part_vec) => {
-                        for part in part_vec {
-                            match part {
-                                ChatMessageContentPart::Image(img_part) => {
-                                    let img_url = img_part.image_url;
-                                    vision_map.get_mut("image").unwrap().push(img_url.url);
-                                }
-                                _ => {}
-                            }
-                        }
+            if let ChatMessage::User { content, .. } = chat_mes
+                && let ChatMessageContent::ContentPart(part_vec) = content
+            {
+                for part in part_vec {
+                    if let ChatMessageContentPart::Image(img_part) = part {
+                        let img_url = img_part.image_url;
+                        vision_map.get_mut("image").unwrap().push(img_url.url);
                     }
-                    _ => {}
-                },
-                _ => {}
+                }
             }
         }
         Ok(vision_map)
@@ -107,9 +100,7 @@ impl Qwen2_5VLProcessor {
         // 0-255 rescale to 0-1
         let img_tensor = img_tensor.affine(1.0 / 255.0, 0.)?;
         // normalize
-        let img_tensor = img_tensor
-            .broadcast_sub(&img_mean)?
-            .broadcast_div(&img_std)?;
+        let img_tensor = img_tensor.broadcast_sub(img_mean)?.broadcast_div(img_std)?;
         // (c, h, w) => (1, c, h, w)
         let img_tensor = img_tensor.unsqueeze(0)?;
         Ok(img_tensor)
@@ -169,7 +160,7 @@ impl Qwen2_5VLProcessor {
         let mut vision_grid_thws_vec = Vec::new();
 
         for img in imgs {
-            let img_tensor = self.process_img(&img, &img_mean, &img_std)?;
+            let img_tensor = self.process_img(&img, img_mean, img_std)?;
             let img_tensor = Tensor::cat(&[&img_tensor, &img_tensor], 0)?.contiguous()?;
             let (img_tensor, grid_thw) = self.process_vision_tensor(&img_tensor)?;
             pixel_values_vec.push(img_tensor);
@@ -196,8 +187,8 @@ impl Qwen2_5VLProcessor {
             let video_tensor = single_video.to_dtype(self.dtype)?.affine(1.0 / 255.0, 0.)?;
             // normalize
             let video_tensor = video_tensor
-                .broadcast_sub(&img_mean)?
-                .broadcast_div(&img_std)?
+                .broadcast_sub(img_mean)?
+                .broadcast_div(img_std)?
                 .contiguous()?;
             let (video_tensor, video_grid_thw) = self.process_vision_tensor(&video_tensor)?;
             pixel_values_vec.push(video_tensor);
@@ -238,7 +229,7 @@ impl Qwen2_5VLProcessor {
                         Err(e) => println!("get_image err: {:?}", e),
                     };
                 }
-                if file_vec.len() > 0 {
+                if !file_vec.is_empty() {
                     let vision_input = self.process_images(file_vec, &img_mean, &img_std);
                     match vision_input {
                         Ok(img_input) => {
@@ -258,7 +249,7 @@ impl Qwen2_5VLProcessor {
                         Err(e) => println!("get_video_data err: {:?}", e),
                     };
                 }
-                if file_vec.len() > 0 {
+                if !file_vec.is_empty() {
                     let vision_input = self.process_videos(file_vec, &img_mean, &img_std);
                     match vision_input {
                         Ok(video_input) => {
@@ -280,10 +271,10 @@ impl Qwen2_5VLProcessor {
         }
         let merge_length = self.vision_setting.merge_size.pow(2);
         let mut text = text.to_string();
-        if image_grid_thw.is_some() {
+        if let Some(ref image_grid_thw) = image_grid_thw {
             let mut index = 0;
             while text.contains(&self.image_token) {
-                let grid_i = image_grid_thw.as_ref().unwrap().i(index)?;
+                let grid_i = image_grid_thw.i(index)?;
                 let repeat_num =
                     grid_i.to_vec1::<u32>()?.iter().product::<u32>() as usize / merge_length;
                 let replace = "<|placeholder|>".repeat(repeat_num);
@@ -292,10 +283,10 @@ impl Qwen2_5VLProcessor {
             }
             text = text.replace("<|placeholder|>", &self.image_token);
         }
-        if video_grid_thw.is_some() {
+        if let Some(ref video_grid_thw) = video_grid_thw {
             let mut index = 0;
             while text.contains(&self.video_token) {
-                let grid_i = video_grid_thw.as_ref().unwrap().i(index)?;
+                let grid_i = video_grid_thw.i(index)?;
                 let repeat_num =
                     grid_i.to_vec1::<u32>()?.iter().product::<u32>() as usize / merge_length;
                 let replace = "<|placeholder|>".repeat(repeat_num);
@@ -336,15 +327,15 @@ pub fn smart_resize(
     }
     let mut h_bar = std::cmp::max(image_factor, round_by_factor(img_h, image_factor));
     let mut w_bar = std::cmp::max(image_factor, round_by_factor(img_w, image_factor));
-    let mut max_pixels = 0u32;
-    let mut min_pixels = 0u32;
-    if is_img {
-        min_pixels = vision_setting.min_pixels;
-        max_pixels = vision_setting.max_pixels;
+
+    let (min_pixels, max_pixels) = if is_img {
+        (vision_setting.min_pixels, vision_setting.max_pixels)
     } else {
-        min_pixels = vision_setting.video_min_pixels;
-        max_pixels = vision_setting.video_max_pixels;
-    }
+        (
+            vision_setting.video_min_pixels,
+            vision_setting.video_max_pixels,
+        )
+    };
     if h_bar * w_bar > max_pixels {
         let beta = ((img_h * img_w) as f32 / max_pixels as f32).sqrt();
         h_bar = floor_by_factor(img_h as f32 / beta, image_factor);
@@ -419,7 +410,7 @@ pub fn get_video_data(
         |decoder: &mut ffmpeg::decoder::Video| -> Result<()> {
             let mut decoded = ffmpeg::frame::Video::empty();
             while decoder.receive_frame(&mut decoded).is_ok() {
-                if frame_id % sample_interval == 0 {
+                if frame_id.is_multiple_of(sample_interval) {
                     let mut rgb_frame = ffmpeg::frame::Video::empty();
                     scaler
                         .run(&decoded, &mut rgb_frame)

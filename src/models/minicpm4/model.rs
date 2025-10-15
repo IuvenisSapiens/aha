@@ -1,3 +1,7 @@
+use anyhow::{Ok, Result};
+use candle_core::{D, Device, Tensor};
+use candle_nn::{Embedding, Linear, Module, RmsNorm, VarBuilder, embedding, rms_norm};
+
 use crate::{
     models::{
         common::{AttentionNobias, MLPNoBias},
@@ -6,9 +10,6 @@ use crate::{
     position_embed::rope::compute_default_rope_parameters,
     utils::tensor_utils::prepare_causal_attention_mask,
 };
-use anyhow::{Ok, Result};
-use candle_core::{D, Device, Tensor};
-use candle_nn::{Embedding, Linear, Module, RmsNorm, VarBuilder, embedding, rms_norm};
 
 pub struct MiniCPMLongRoPE {
     short_factor: Vec<f32>,
@@ -33,15 +34,13 @@ impl MiniCPMLongRoPE {
         let scaling_factor =
             (1.0 + scale.ln() / (original_max_position_embeddings as f64).ln()).sqrt();
         let inv_freq = compute_default_rope_parameters(head_dim, rope_theta);
-        let inv_freq =
-            Tensor::from_slice(&inv_freq, (1, inv_freq.len()), device)?;
+        let inv_freq = Tensor::from_slice(&inv_freq, (1, inv_freq.len()), device)?;
         let max_seq_len_cached = max_position_embeddings;
         let t = Tensor::arange(0.0_f32, max_position_embeddings as f32, device)?
             .reshape((max_position_embeddings, 1))?;
         // short_factor.len() = 32
         // head_dim = 1024 / 16 = 64, inv_freq.len() = 32
-        let ext_factors =
-            Tensor::from_slice(&short_factor, (1, short_factor.len()), device)?;
+        let ext_factors = Tensor::from_slice(&short_factor, (1, short_factor.len()), device)?;
         let ext_factors = Tensor::ones_like(&ext_factors)?.div(&ext_factors)?;
         // (seq_len, 1) matmul (1, 32) -> (seq_len, 32) * (1, 32)-> (seq_len, 32)
         let freqs = t.matmul(&ext_factors)?.broadcast_mul(&inv_freq)?;
@@ -63,8 +62,7 @@ impl MiniCPMLongRoPE {
     }
     pub fn update_cos_sin_cache(&mut self, seqlen: usize) -> Result<()> {
         self.max_seq_len_cached = seqlen;
-        let t = Tensor::arange(0.0_f32, seqlen as f32, &self.device)?
-            .reshape((seqlen, 1))?;
+        let t = Tensor::arange(0.0_f32, seqlen as f32, &self.device)?.reshape((seqlen, 1))?;
         let mut ext_factors = Tensor::from_slice(
             &self.short_factor,
             (1, self.short_factor.len()),
@@ -85,7 +83,7 @@ impl MiniCPMLongRoPE {
     }
     pub fn forward(&mut self, pos_offset: usize, seqlen: usize) -> Result<(Tensor, Tensor)> {
         if pos_offset + seqlen > self.max_seq_len_cached {
-            let _ = self.update_cos_sin_cache(pos_offset + seqlen)?;
+            self.update_cos_sin_cache(pos_offset + seqlen)?;
         }
         let cos = self.cos_cached.narrow(0, pos_offset, seqlen)?;
         let sin = self.sin_cached.narrow(0, pos_offset, seqlen)?;
@@ -143,7 +141,9 @@ impl MiniCPMDecoderLayer {
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let xs = self.input_layernorm.forward(xs)?;
-        let xs = self.self_attn.forward(&xs, cos, sin, attention_mask, true)?;
+        let xs = self
+            .self_attn
+            .forward(&xs, cos, sin, attention_mask, true)?;
         let xs = (residual
             + xs.affine(
                 self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
@@ -168,7 +168,9 @@ impl MiniCPMDecoderLayer {
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let xs = self.input_layernorm.forward(xs)?;
-        let xs = self.self_attn.forward_with_cache(&xs, cos, sin, attention_mask, true)?;
+        let xs = self
+            .self_attn
+            .forward_with_cache(&xs, cos, sin, attention_mask, true)?;
         let xs = (residual
             + xs.affine(
                 self.scale_depth as f64 / (self.num_hidden_layers as f64).sqrt(),
@@ -220,11 +222,11 @@ impl MiniCPMModel {
         })
     }
 
-    pub fn forward(&mut self, input_ids: &Tensor, position_id: usize) -> Result<Tensor> {        
+    pub fn forward(&mut self, input_ids: &Tensor, position_id: usize) -> Result<Tensor> {
         let (bs, seq_len) = input_ids.dims2()?;
         let input_embeds = self
             .embed_tokens
-            .forward(&input_ids)?
+            .forward(input_ids)?
             .affine(self.cfg.scale_emb, 0.0)?;
         let attention_mask: Option<&Tensor> = {
             if seq_len <= 1 {
@@ -238,7 +240,7 @@ impl MiniCPMModel {
                 )?)
             }
         };
-        
+
         let (cos, sin) = self.rope_emb.forward(position_id, seq_len)?;
         let mut hidden_states = input_embeds;
         for decode_layer in &self.layers {
@@ -258,7 +260,7 @@ impl MiniCPMModel {
         let (bs, seq_len) = input_ids.dims2()?;
         let input_embeds = self
             .embed_tokens
-            .forward(&input_ids)?
+            .forward(input_ids)?
             .affine(self.cfg.scale_emb, 0.0)?;
         let attention_mask: Option<&Tensor> = {
             if seq_len <= 1 {

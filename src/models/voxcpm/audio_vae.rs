@@ -1,7 +1,6 @@
 use anyhow::{Ok, Result};
 use candle_core::{D, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig, ConvTranspose1d, ConvTranspose1dConfig, Module, VarBuilder};
-use std::{result::Result::Ok as StdOk};
 
 pub struct CausalConv1d {
     conv1d: Conv1d,
@@ -65,7 +64,7 @@ impl CausalConvTranspose1d {
             groups,
         };
 
-        let conv_transpose1d = ConvTranspose1d::new(weight, bias, config.clone());
+        let conv_transpose1d = ConvTranspose1d::new(weight, bias, config);
         Ok(Self {
             conv_transpose1d,
             padding,
@@ -95,13 +94,10 @@ impl WNCausalConv1d {
         groups: usize,
         stride: usize,
     ) -> Result<Self> {
-        let in_c = in_c / groups;        
+        let in_c = in_c / groups;
         let weight_g = vb.get((out_c, 1, 1), "weight_g")?;
         let weight_v = vb.get((out_c, in_c, kernel_size), "weight_v")?;
-        let bias = match vb.get(out_c, "bias") {
-            StdOk(b) => Some(b),
-            Err(_) => None,
-        };
+        let bias = vb.get(out_c, "bias").ok();
         let weight_norm = weight_v.sqr()?.sum_keepdim(1)?.sum_keepdim(2)?.sqrt()?;
         let normalized_weight = weight_v.broadcast_div(&weight_norm)?;
         let scaled_weight = normalized_weight.broadcast_mul(&weight_g)?;
@@ -133,10 +129,7 @@ impl WNCausalConvTranspose1d {
         let in_c = in_c / groups;
         let weight_g = vb.get((in_c, 1, 1), "weight_g")?;
         let weight_v = vb.get((in_c, out_c, kernel_size), "weight_v")?;
-        let bias = match vb.get(out_c, "bias") {
-            StdOk(b) => Some(b),
-            Err(_) => None,
-        };
+        let bias = vb.get(out_c, "bias").ok();
         let weight_norm = weight_v.sqr()?.sum_keepdim(1)?.sum_keepdim(2)?.sqrt()?;
         let normalized_weight = weight_v.broadcast_div(&weight_norm)?;
         let scaled_weight = normalized_weight.broadcast_mul(&weight_g)?;
@@ -302,14 +295,15 @@ impl CausalEncoder {
         depthwise: bool,
     ) -> Result<Self> {
         let mut d_model = d_model;
-        let mut groups = 1;
+        let mut groups;
         let block0 = WNCausalConv1d::new(vb.pp("block.0"), 1, d_model, 7, 1, 3, 1, 1)?;
         let vb_block = vb.pp("block");
         let mut block1_4 = Vec::new();
         for (i, stride) in strides.iter().enumerate() {
             d_model *= 2;
             groups = if depthwise { d_model / 2 } else { 1 };
-            let block_i = CausalEncoderBlock::new(vb_block.pp(i+1), None, d_model, *stride, groups)?;
+            let block_i =
+                CausalEncoderBlock::new(vb_block.pp(i + 1), None, d_model, *stride, groups)?;
             block1_4.push(block_i);
         }
         let fc_mu = WNCausalConv1d::new(vb.pp("fc_mu"), d_model, laten_dim, 3, 1, 1, 1, 1)?;
@@ -458,8 +452,8 @@ impl CausalDecoder {
         })
     }
 
-    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {   
-        let x = self.model0.forward(x)?;  
+    pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        let x = self.model0.forward(x)?;
         let mut x = self.model1.forward(&x)?;
         for model_i in &self.model2_5 {
             x = model_i.forward(&x)?;
@@ -528,10 +522,10 @@ impl AudioVAE {
         })
     }
 
-    pub fn preprocess(&self, audio_data: &Tensor, sample_rate: Option<usize>) -> Result<Tensor>{
+    pub fn preprocess(&self, audio_data: &Tensor, sample_rate: Option<usize>) -> Result<Tensor> {
         let sample_rate = match sample_rate {
             Some(r) => r,
-            None => self.sample_rate
+            None => self.sample_rate,
         };
         assert_eq!(sample_rate, self.sample_rate);
         let pad_to = self.hop_length;
@@ -549,7 +543,7 @@ impl AudioVAE {
     pub fn encode(&self, audio_data: &Tensor, sample_rate: Option<usize>) -> Result<Tensor> {
         let audio_data = match audio_data.rank() {
             2 => audio_data.unsqueeze(1)?,
-            _ => audio_data.clone()
+            _ => audio_data.clone(),
         };
         let audio_data = self.preprocess(&audio_data, sample_rate)?;
         let (_, mu, _) = self.encoder.forward(&audio_data)?;

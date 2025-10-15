@@ -33,13 +33,13 @@ pub fn load_image_from_base64(base64_data: &str) -> Result<DynamicImage> {
     Ok(img)
 }
 
-pub fn get_image(file: &String) -> Result<DynamicImage> {
+pub fn get_image(file: &str) -> Result<DynamicImage> {
     let mut img = None;
     if file.starts_with("http://") || file.starts_with("https://") {
-        img = Some(load_image_from_url(&file)?);
+        img = Some(load_image_from_url(file)?);
     }
     if file.starts_with("file://") {
-        let mut path = file.clone();
+        let mut path = file.to_owned();
         path = path.split_off(7);
         img = Some(
             ImageReader::open(path)
@@ -48,15 +48,13 @@ pub fn get_image(file: &String) -> Result<DynamicImage> {
                 .map_err(|e| anyhow!(format!("Failed to decode image: {}", e)))?,
         );
     }
-    if file.starts_with("data:image") {
-        if file.contains("base64,") {
-            let data: Vec<&str> = file.split("base64,").collect();
-            let data = data[1];
-            img = Some(load_image_from_base64(data)?);
-        }
+    if file.starts_with("data:image") && file.contains("base64,") {
+        let data: Vec<&str> = file.split("base64,").collect();
+        let data = data[1];
+        img = Some(load_image_from_base64(data)?);
     }
-    if img.is_some() {
-        return Ok(img.unwrap());
+    if let Some(img) = img {
+        return Ok(img);
     }
     Err(anyhow!("get image from message failed".to_string()))
 }

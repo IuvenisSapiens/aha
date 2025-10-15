@@ -1,5 +1,6 @@
-use ffmpeg_next as ffmpeg;
 use std::{fs::File, io::Write};
+
+use ffmpeg_next as ffmpeg;
 
 #[allow(unused)]
 fn save_file(
