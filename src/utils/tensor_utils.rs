@@ -1,23 +1,15 @@
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{Ok, Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor, shape::Dim};
 
 pub fn prepare_causal_attention_mask(
     b_size: usize,
     tgt_len: usize,
     seqlen_offset: usize,
-    device: &Device
+    device: &Device,
 ) -> Result<Tensor> {
     // Sliding window mask?
     let mask: Vec<_> = (0..tgt_len)
-        .flat_map(|i| {
-            (0..tgt_len).map(move |j| {
-                if i < j {
-                    f32::NEG_INFINITY
-                } else {
-                    0.
-                }
-            })
-        })
+        .flat_map(|i| (0..tgt_len).map(move |j| if i < j { f32::NEG_INFINITY } else { 0. }))
         .collect();
     let mask = Tensor::from_slice(&mask, (tgt_len, tgt_len), device)?;
     let mask = if seqlen_offset > 0 {
@@ -84,12 +76,10 @@ pub fn nonzero_index_vec(mask: &Tensor) -> Result<Vec<u32>> {
         mask = mask.to_dtype(DType::U32)?;
     }
     match mask.rank() {
-        0 => {
-            return Err(anyhow!(format!(
-                "input rank must > 0, the input tensor rank: {}",
-                mask.rank()
-            )));
-        }
+        0 => Err(anyhow!(format!(
+            "input rank must > 0, the input tensor rank: {}",
+            mask.rank()
+        ))),
         1 => {
             let mask_vector = mask.to_vec1::<u32>()?;
             let indices: Vec<u32> = mask_vector
@@ -99,12 +89,10 @@ pub fn nonzero_index_vec(mask: &Tensor) -> Result<Vec<u32>> {
                 .collect();
             Ok(indices)
         }
-        _ => {
-            return Err(anyhow!(format!(
-                "input rank not support, the input tensor rank: {}",
-                mask.rank()
-            )));
-        }
+        _ => Err(anyhow!(format!(
+            "input rank not support, the input tensor rank: {}",
+            mask.rank()
+        ))),
     }
 }
 
@@ -119,8 +107,7 @@ pub fn nonzero_index(mask: &Tensor) -> Result<Tensor> {
         }
         1 => {
             let index_vec = nonzero_index_vec(mask)?;
-            let indices_tensor = Tensor::from_slice(&index_vec, index_vec.len(), mask.device())?;
-            indices_tensor
+            Tensor::from_slice(&index_vec, index_vec.len(), mask.device())?
         }
         _ => {
             return Err(anyhow!(format!(
@@ -140,12 +127,10 @@ pub fn zero_index_vec(mask: &Tensor) -> Result<Vec<u32>> {
         mask = mask.to_dtype(DType::U32)?;
     }
     match mask.rank() {
-        0 => {
-            return Err(anyhow!(format!(
-                "input rank must > 0, the input tensor rank: {}",
-                mask.rank()
-            )));
-        }
+        0 => Err(anyhow!(format!(
+            "input rank must > 0, the input tensor rank: {}",
+            mask.rank()
+        ))),
         1 => {
             let mask_vector = mask.to_vec1::<u32>()?;
             let indices: Vec<u32> = mask_vector
@@ -155,12 +140,10 @@ pub fn zero_index_vec(mask: &Tensor) -> Result<Vec<u32>> {
                 .collect();
             Ok(indices)
         }
-        _ => {
-            return Err(anyhow!(format!(
-                "input rank not support, the input tensor rank: {}",
-                mask.rank()
-            )));
-        }
+        _ => Err(anyhow!(format!(
+            "input rank not support, the input tensor rank: {}",
+            mask.rank()
+        ))),
     }
 }
 
@@ -178,12 +161,8 @@ pub fn nonzero_slice(mask: &Tensor) -> Result<Vec<(usize, usize)>> {
     // 索引前闭后开
     let mut index_vec = nonzero_index_vec(mask)?;
     match index_vec.len() {
-        0 => {
-            return Ok(vec![]);
-        }
-        1 => {
-            return Ok(vec![(index_vec[0] as usize, (index_vec[0] + 1) as usize)]);
-        }
+        0 => Ok(vec![]),
+        1 => Ok(vec![(index_vec[0] as usize, (index_vec[0] + 1) as usize)]),
         _ => {
             let mut vec_slice = vec![];
             let mut start = index_vec.remove(0);
@@ -244,7 +223,7 @@ pub fn get_equal_mask(input_ids: &Tensor, token_ids: u32) -> Result<Tensor> {
 
 pub fn get_vision_next_indices(input_ids: &Tensor, token_id: u32) -> Result<Tensor> {
     // input_ids -> shape: (seq_len)
-    let mask = get_equal_mask(&input_ids, token_id)?;
+    let mask = get_equal_mask(input_ids, token_id)?;
     let indices = nonzero_index(&mask)?;
     let indices = indices.broadcast_add(&Tensor::new(vec![1u32], input_ids.device())?)?;
     Ok(indices)
@@ -255,12 +234,10 @@ pub fn linspace(start: f32, end: f32, steps: usize, device: &Device) -> Result<T
     if steps == 1 {
         let t = Tensor::from_slice(&[start], 1, device)?;
         return Ok(t);
-    }    
-    let step_size = (end - start) / (steps-1) as f32;
-    let data: Vec<f32> = (0..steps)
-        .map(|i| start + i as f32 * step_size)
-        .collect();
-    
+    }
+    let step_size = (end - start) / (steps - 1) as f32;
+    let data: Vec<f32> = (0..steps).map(|i| start + i as f32 * step_size).collect();
+
     let t = Tensor::from_slice(&data, steps, device)?;
     Ok(t)
 }

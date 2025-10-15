@@ -26,7 +26,7 @@ impl SingleChineseTokenizer {
             if len >= 2 {
                 let is_chinese = token.chars().all(|c| {
                     let c_ = c as u32;
-                    0x4E00 <= c_ && c_ <= 0x9FFF
+                    (0x4E00..=0x9FFF).contains(&c_)
                 });
                 if is_chinese {
                     multichar_tokens.push(token);

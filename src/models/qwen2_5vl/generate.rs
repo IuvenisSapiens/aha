@@ -1,16 +1,4 @@
 // use crate::models::GenerateStream;
-use crate::models::qwen2_5vl::config::Qwen2_5VLConfig;
-use crate::utils::utils::{
-    build_completion_chunk_response, build_completion_response, find_type_files, get_device, get_dtype, get_logit_processor
-};
-use crate::{
-    chat_template::chat_template::ChatTemplate,
-    models::{
-        GenerateModel,
-        qwen2_5vl::{model::Qwen2_5VLModel, processor::Qwen2_5VLProcessor},
-    },
-    tokenizer::tokenizer::TokenizerModel,
-};
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
@@ -19,6 +7,20 @@ use openai_dive::v1::resources::chat::{
 };
 use rocket::async_stream::stream;
 use rocket::futures::Stream;
+
+use crate::models::qwen2_5vl::config::Qwen2_5VLConfig;
+use crate::utils::{
+    build_completion_chunk_response, build_completion_response, find_type_files, get_device,
+    get_dtype, get_logit_processor,
+};
+use crate::{
+    chat_template::ChatTemplate,
+    models::{
+        GenerateModel,
+        qwen2_5vl::{model::Qwen2_5VLModel, processor::Qwen2_5VLProcessor},
+    },
+    tokenizer::TokenizerModel,
+};
 
 pub struct Qwen2_5VLGenerateModel<'a> {
     chat_template: ChatTemplate<'a>,
@@ -43,7 +45,7 @@ impl<'a> Qwen2_5VLGenerateModel<'a> {
         let endoftext_id = cfg.bos_token_id;
         let im_end_id = cfg.eos_token_id;
         // let model_list = find_safetensors_files(&path)?;
-        let model_list = find_type_files(&path, "safetensors")?;
+        let model_list = find_type_files(path, "safetensors")?;
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&model_list, dtype, device)? };
         let qwen2_5_vl = Qwen2_5VLModel::new(cfg, vb)?;
 
@@ -60,7 +62,6 @@ impl<'a> Qwen2_5VLGenerateModel<'a> {
 }
 
 impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
-
     fn generate(&mut self, mes: ChatCompletionParameters) -> Result<ChatCompletionResponse> {
         let mut logit_processor = get_logit_processor(mes.temperature, mes.top_p);
         let mes_render = self.chat_template.apply_chat_template(&mes)?;
@@ -84,10 +85,7 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
             .broadcast_sub(&Tensor::new(vec![1_u32], input_ids.device())?)?;
 
         let mut generate = Vec::new();
-        let sample_len = match mes.max_tokens {
-            Some(max) => max,
-            None => 1024,
-        };
+        let sample_len = mes.max_tokens.unwrap_or(1024);
         for _ in 0..sample_len {
             let logits = self.qwen2_5_vl.forward(
                 &input_ids,
@@ -145,10 +143,7 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
             .to_dtype(candle_core::DType::U32)?
             .broadcast_sub(&Tensor::new(vec![1_u32], input_ids.device())?)?;
 
-        let sample_len = match mes.max_tokens {
-            Some(max) => max,
-            None => 512,
-        };
+        let sample_len = mes.max_tokens.unwrap_or(512);
         let stream = stream! {
             let mut error_tokens = Vec::new();
             let mut pixel_values = pixel_values.as_ref();
@@ -170,7 +165,7 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
                 let logits = logits.squeeze(0)?.squeeze(0)?.to_dtype(DType::F32)?;
                 let next_token = logit_processor.sample(&logits)?;
                 let mut decode_ids = Vec::new();
-                if error_tokens.len() > 0 {
+                if !error_tokens.is_empty() {
                     decode_ids.extend_from_slice(&error_tokens);
                 }
                 decode_ids.push(next_token);

@@ -72,8 +72,8 @@ pub struct VisionSetting {
     pub image_std: Vec<f32>,
 }
 
-impl VisionSetting {
-    pub fn default() -> Self {
+impl Default for VisionSetting {
+    fn default() -> Self {
         Self {
             image_factor: 28,
             min_pixels: 4 * 28 * 28,
@@ -90,8 +90,8 @@ impl VisionSetting {
             fps: 2.0,
             fps_min_frames: 4,
             fps_max_frames: 768,
-            image_mean: vec![0.48145466_f32, 0.4578275, 0.40821073],
-            image_std: vec![0.26862954, 0.26130258, 0.27577711],
+            image_mean: vec![0.48145466_f32, 0.4578275f32, 0.40821073f32],
+            image_std: vec![0.26862954f32, 0.2613026f32, 0.2757771f32],
         }
     }
 }

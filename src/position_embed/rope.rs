@@ -47,10 +47,10 @@ pub fn apply_multimodel_rotary_pos_emb(
         .contiguous()?;
     let q_embed = q
         .broadcast_mul(&cos)?
-        .add(&rotate_half(&q)?.broadcast_mul(&sin)?)?;
+        .add(&rotate_half(q)?.broadcast_mul(&sin)?)?;
     let k_embed = k
         .broadcast_mul(&cos)?
-        .add(&rotate_half(&k)?.broadcast_mul(&sin)?)?;
+        .add(&rotate_half(k)?.broadcast_mul(&sin)?)?;
     Ok((q_embed, k_embed))
 }
 
@@ -64,7 +64,7 @@ pub fn apply_rotary_pos_emb_vision(
     // cos, sin -> (seq_len, head_dim) -> (seq_len, 1, head_dim)
     let cos = cos.unsqueeze(D::Minus2)?;
     let sin = sin.unsqueeze(D::Minus2)?;
-    
+
     let q_embed = q
         .broadcast_mul(&cos)?
         .add(&rotate_half(q)?.broadcast_mul(&sin)?)?;
@@ -96,25 +96,19 @@ pub fn apply_rotary_pos_emb(
         sin = sin.unsqueeze(1)?;
     }
     let orig_dtype = q.dtype();
-    let q = if tof32 {
-        &q.to_dtype(DType::F32)?
-    } else {
-        q
-    };
-    let k = if tof32 {
-        &k.to_dtype(DType::F32)?
-    } else {
-        k
-    };
+    let q = if tof32 { &q.to_dtype(DType::F32)? } else { q };
+    let k = if tof32 { &k.to_dtype(DType::F32)? } else { k };
     let cos = cos.to_dtype(q.dtype())?;
     let sin = sin.to_dtype(q.dtype())?;
 
     let q_embed = q
         .broadcast_mul(&cos)?
-        .add(&rotate_half(q)?.broadcast_mul(&sin)?)?.to_dtype(orig_dtype)?;
+        .add(&rotate_half(q)?.broadcast_mul(&sin)?)?
+        .to_dtype(orig_dtype)?;
     let k_embed = k
         .broadcast_mul(&cos)?
-        .add(&rotate_half(k)?.broadcast_mul(&sin)?)?.to_dtype(orig_dtype)?;
+        .add(&rotate_half(k)?.broadcast_mul(&sin)?)?
+        .to_dtype(orig_dtype)?;
     Ok((q_embed, k_embed))
 }
 
@@ -191,10 +185,7 @@ pub struct Qwen2_5VisionRotaryEmbedding {
 
 impl Qwen2_5VisionRotaryEmbedding {
     pub fn new(dim: usize, theta_base: Option<f32>) -> Self {
-        let theta_base = match theta_base {
-            Some(theta) => theta,
-            None => 10000.0_f32,
-        };
+        let theta_base = theta_base.unwrap_or(10000.0_f32);
         let inv_freq = compute_default_rope_parameters(dim, theta_base);
         Self { inv_freq }
     }

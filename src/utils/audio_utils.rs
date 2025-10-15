@@ -1,10 +1,11 @@
+use std::f64::consts::PI;
+use std::path::Path;
+
 use anyhow::{Result, anyhow};
 use candle_core::{D, Device, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig, Module};
 use hound::{SampleFormat, WavReader};
 use num::integer::gcd;
-use std::f64::consts::PI;
-use std::path::Path;
 
 // 重采样方法枚举
 #[derive(Debug, Clone, Copy)]
@@ -12,7 +13,6 @@ pub enum ResamplingMethod {
     SincInterpHann,
     SincInterpKaiser,
 }
-
 
 // 零阶修正贝塞尔函数 I0
 fn i0(x: f32) -> f32 {
@@ -80,7 +80,7 @@ pub fn get_sinc_resample_kernel(
             window_arg.cos()?.sqr()?
         }
         ResamplingMethod::SincInterpKaiser => {
-            let beta_val = beta.unwrap_or(14.769656459379492);
+            let beta_val = beta.unwrap_or(14.769_656_f32);
             let i0_beta = i0(beta_val);
 
             let normalized_t = t.affine(1.0 / lowpass_filter_width as f64, 0.0)?;
@@ -94,8 +94,7 @@ pub fn get_sinc_resample_kernel(
                 .iter()
                 .map(|x| i0(beta_val * x) / i0_beta)
                 .collect();
-            let window = Tensor::new(window_val, device)?.reshape(sqrt_dims)?;
-            window
+            Tensor::new(window_val, device)?.reshape(sqrt_dims)?
         }
     };
 
@@ -196,7 +195,7 @@ pub fn resample(
         rolloff,
         resampling_method,
         beta,
-        &device,
+        device,
     )?;
     let t = apply_sinc_resample_kernel(waveform, orig_freq, new_freq, gcd_val, &kernel, width)?;
     Ok(t)
@@ -220,35 +219,28 @@ pub fn load_audio<P: AsRef<Path>>(path: P, device: Device) -> Result<(Tensor, us
     let spec = reader.spec();
     let samples: Vec<f32> = match spec.sample_format {
         SampleFormat::Int => {
-            // 将整数样本转换为浮点数 [-1.0, 1.0]            
+            // 将整数样本转换为浮点数 [-1.0, 1.0]
             // println!("spec.bits_per_sample: {}", spec.bits_per_sample);
-            let samples = match spec.bits_per_sample {
-                8 => {
-                    reader
+            match spec.bits_per_sample {
+                8 => reader
                     .samples::<i8>()
                     .map(|s| s.map(|sample| sample as f32 / i8::MAX as f32))
-                    .collect::<Result<Vec<_>, _>>()?
-                },
-                16 => {
-                    reader
+                    .collect::<Result<Vec<_>, _>>()?,
+                16 => reader
                     .samples::<i16>()
                     .map(|s| s.map(|sample| sample as f32 / i16::MAX as f32))
-                    .collect::<Result<Vec<_>, _>>()?
-                },
-                24 => {
-                    reader
+                    .collect::<Result<Vec<_>, _>>()?,
+                24 => reader
                     .samples::<i32>()
                     .map(|s| s.map(|sample| sample as f32 / 8388607.0))
-                    .collect::<Result<Vec<_>, _>>()?
-                },
+                    .collect::<Result<Vec<_>, _>>()?,
                 _ => {
                     return Err(anyhow::anyhow!(
                         "Unsupported bit depth: {}",
                         spec.bits_per_sample
                     ));
                 }
-            };
-            samples
+            }
         }
         SampleFormat::Float => {
             // 直接读取浮点数样本
@@ -278,8 +270,9 @@ pub fn load_audio_with_resample<P: AsRef<Path>>(
     target_sample_rate: Option<usize>,
 ) -> Result<Tensor> {
     let (mut audio, sr) = load_audio(path, device)?;
-    if target_sample_rate.is_some() && target_sample_rate.unwrap() as usize != sr {
-        let target_sample_rate = target_sample_rate.unwrap();
+    if let Some(target_sample_rate) = target_sample_rate
+        && target_sample_rate != sr
+    {
         audio = resample_simple(&audio, sr as i64, target_sample_rate as i64)?;
     }
     Ok(audio)

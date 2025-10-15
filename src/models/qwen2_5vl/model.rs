@@ -1,16 +1,19 @@
-use crate::{
-    models::qwen2_5vl::config::{Qwen2_5VLConfig, RopeScaling},
-    position_embed::rope::{
-        apply_rotary_pos_emb, apply_rotary_pos_emb_vision, Qwen2_5VLTextRotaryEmbedding, Qwen2_5VisionRotaryEmbedding
-    },
-    utils::tensor_utils::{
-        get_equal_mask, get_vision_next_indices, masked_scatter_dim0, nonzero_index, repeat_kv, safe_arg_sort_last_dim, zero_index
-    },
-};
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor};
 use candle_nn::{
     Activation, Init, Linear, Module, RmsNorm, VarBuilder, linear, linear_no_bias, rms_norm,
+};
+
+use crate::{
+    models::qwen2_5vl::config::{Qwen2_5VLConfig, RopeScaling},
+    position_embed::rope::{
+        Qwen2_5VLTextRotaryEmbedding, Qwen2_5VisionRotaryEmbedding, apply_rotary_pos_emb,
+        apply_rotary_pos_emb_vision,
+    },
+    utils::tensor_utils::{
+        get_equal_mask, get_vision_next_indices, masked_scatter_dim0, nonzero_index, repeat_kv,
+        safe_arg_sort_last_dim, zero_index,
+    },
 };
 
 pub struct Qwen2_5VisionPatchEmbed {
@@ -175,7 +178,7 @@ impl Qwen2_5VLVisionAttention {
             let attn_weights = query_states
                 .matmul(&key_states.transpose(D::Minus2, D::Minus1)?)?
                 .broadcast_mul(&self.scale)?;
-            let attn_weights = attn_weights.broadcast_add(&attention_mask)?;
+            let attn_weights = attn_weights.broadcast_add(attention_mask)?;
             let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
             attn_weights.matmul(&value_states)?
         };
@@ -495,7 +498,7 @@ impl Qwen2_5VLVisionModel {
             2 => {
                 let mut cu_seqlens_repeat = Vec::new();
                 for (index, t) in grid_t.iter().enumerate() {
-                    cu_seqlens_repeat.push(cu_seqlens.i(index)?.repeat(t.clone() as usize)?);
+                    cu_seqlens_repeat.push(cu_seqlens.i(index)?.repeat(*t as usize)?);
                 }
                 Tensor::cat(&cu_seqlens_repeat, 0)?.flatten_all()?
             }
@@ -521,7 +524,7 @@ impl Qwen2_5VLVisionModel {
             hidden_states.device(),
             hidden_states.dtype(),
         )?;
-        let mut attention_mask = attention_mask_window.clone();
+        let mut attention_mask;
         for (layer_num, block) in self.blocks.iter().enumerate() {
             if self.fullatt_block_indexes.contains(&layer_num) {
                 attention_mask = attention_mask_full.clone();
@@ -536,7 +539,6 @@ impl Qwen2_5VLVisionModel {
         Ok(hidden_states)
     }
 }
-
 
 #[derive(Debug, Clone)]
 struct Qwen2_5VLTextMLP {
@@ -658,8 +660,7 @@ impl Qwen2_5VLTextAttention {
                     Some(mask) => attn_weights.broadcast_add(mask)?,
                 };
                 let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
-                let attn_weights = attn_weights.matmul(&value_states)?;
-                attn_weights
+                attn_weights.matmul(&value_states)?
             }
             #[cfg(feature = "flash-attn")]
             {
@@ -897,12 +898,9 @@ impl Qwen2_5VLModel {
         let mut mrope_position_deltas: Vec<i64> = Vec::new();
         if image_grid_thw.is_some() || video_grid_thw.is_some() {
             let total_input_ids = input_ids.clone();
-            let mut mask_;
-            if mask.is_none() {
-                mask_ = Tensor::ones_like(&total_input_ids)?;
-            } else {
-                mask_ = mask.unwrap().clone();
-            }
+            let mask_ = mask
+                .cloned()
+                .unwrap_or(Tensor::ones_like(&total_input_ids)?);
             let mut position_ids = Tensor::ones(
                 (3, input_ids.dim(0)?, input_ids.dim(1)?),
                 input_ids.dtype(),
@@ -950,7 +948,7 @@ impl Qwen2_5VLModel {
                             let llm_grid_h = thw[1] / spatial_merge_size as u32;
                             let llm_grid_w = thw[2] / spatial_merge_size as u32;
                             let text_len = text_end - text_start;
-                            let start_idx = if llm_pos_ids_list.len() > 0 {
+                            let start_idx = if !llm_pos_ids_list.is_empty() {
                                 llm_pos_ids_list[llm_pos_ids_list.len() - 1]
                                     .max_all()?
                                     .to_scalar::<u32>()?
@@ -1024,7 +1022,7 @@ impl Qwen2_5VLModel {
                 };
 
                 if text_start < input_ids_i.dim(0)? as u32 {
-                    let start_idx = if llm_pos_ids_list.len() > 0 {
+                    let start_idx = if !llm_pos_ids_list.is_empty() {
                         llm_pos_ids_list[llm_pos_ids_list.len() - 1]
                             .max_all()?
                             .to_scalar::<u32>()?
@@ -1051,66 +1049,61 @@ impl Qwen2_5VLModel {
             if mrope_position_deltas.rank() == 1 {
                 mrope_position_deltas = mrope_position_deltas.unsqueeze(0)?;
             }
-            return Ok((position_ids.contiguous()?, mrope_position_deltas));
-        } else {
-            if mask.is_some() {
-                let mut position_ids = mask
-                    .unwrap()
-                    .to_dtype(candle_core::DType::F64)?
-                    .cumsum(D::Minus1)?
-                    .to_dtype(candle_core::DType::U32)?
-                    .broadcast_sub(&Tensor::new(vec![1_u32], input_ids.device())?)?;
-                for i in 0..position_ids.dim(0)? {
-                    let mut position_ids_i = position_ids.i(i)?;
-                    let mask_i = mask.unwrap().i(i)?;
-                    // 如果有pad, 将填充位置置为1
-                    // 当bs>1, 可能存在不同序列长度，需要添加pad使seq_len长度一致
-                    if mask_i.sum_all()?.to_scalar::<u32>()? != mask_i.dim(0)? as u32 {
-                        let zero_indices = zero_index(&mask_i)?;
-                        let replace_1 = Tensor::ones(
-                            zero_indices.dim(0)?,
-                            candle_core::DType::U32,
-                            input_ids.device(),
-                        )?;
-                        position_ids_i = position_ids_i
-                            .scatter(&zero_indices, &replace_1, 0)?
-                            .unsqueeze(0)?;
-                        position_ids = position_ids.slice_assign(
-                            &[(i..i + 1), (0..position_ids.dim(1)?)],
-                            &position_ids_i,
-                        )?;
-                    }
-                }
-                position_ids = position_ids
-                    .unsqueeze(0)?
-                    .broadcast_as((3, input_ids.dim(0)?, input_ids.dim(1)?))?
-                    .contiguous()?;
-                let mut mrope_position_deltas = position_ids
-                    .max(0)?
-                    .max(D::Minus1)?
-                    .broadcast_sub(&Tensor::new(
-                        vec![mask.unwrap().dim(D::Minus1)? as u32 - 1],
+            Ok((position_ids.contiguous()?, mrope_position_deltas))
+        } else if let Some(mask) = mask {
+            let mut position_ids = mask
+                .to_dtype(candle_core::DType::F64)?
+                .cumsum(D::Minus1)?
+                .to_dtype(candle_core::DType::U32)?
+                .broadcast_sub(&Tensor::new(vec![1_u32], input_ids.device())?)?;
+            for i in 0..position_ids.dim(0)? {
+                let mut position_ids_i = position_ids.i(i)?;
+                let mask_i = mask.i(i)?;
+                // 如果有pad, 将填充位置置为1
+                // 当bs>1, 可能存在不同序列长度，需要添加pad使seq_len长度一致
+                if mask_i.sum_all()?.to_scalar::<u32>()? != mask_i.dim(0)? as u32 {
+                    let zero_indices = zero_index(&mask_i)?;
+                    let replace_1 = Tensor::ones(
+                        zero_indices.dim(0)?,
+                        candle_core::DType::U32,
                         input_ids.device(),
-                    )?)?
-                    .contiguous()?;
-                if mrope_position_deltas.rank() == 1 {
-                    mrope_position_deltas = mrope_position_deltas.unsqueeze(0)?;
+                    )?;
+                    position_ids_i = position_ids_i
+                        .scatter(&zero_indices, &replace_1, 0)?
+                        .unsqueeze(0)?;
+                    position_ids = position_ids
+                        .slice_assign(&[(i..i + 1), (0..position_ids.dim(1)?)], &position_ids_i)?;
                 }
-                return Ok((position_ids, mrope_position_deltas));
-            } else {
-                let position_ids =
-                    Tensor::arange(0_u32, input_ids.dim(D::Minus1)? as u32, input_ids.device())?
-                        .unsqueeze(0)?
-                        .unsqueeze(0)?
-                        .broadcast_as((3, input_ids.dim(0)?, input_ids.dim(D::Minus1)?))?
-                        .contiguous()?;
-                let mrope_position_deltas = Tensor::zeros(
-                    (input_ids.dim(0)?, 1),
-                    input_ids.dtype(),
-                    input_ids.device(),
-                )?;
-                Ok((position_ids, mrope_position_deltas))
             }
+            position_ids = position_ids
+                .unsqueeze(0)?
+                .broadcast_as((3, input_ids.dim(0)?, input_ids.dim(1)?))?
+                .contiguous()?;
+            let mut mrope_position_deltas = position_ids
+                .max(0)?
+                .max(D::Minus1)?
+                .broadcast_sub(&Tensor::new(
+                    vec![mask.dim(D::Minus1)? as u32 - 1],
+                    input_ids.device(),
+                )?)?
+                .contiguous()?;
+            if mrope_position_deltas.rank() == 1 {
+                mrope_position_deltas = mrope_position_deltas.unsqueeze(0)?;
+            }
+            Ok((position_ids, mrope_position_deltas))
+        } else {
+            let position_ids =
+                Tensor::arange(0_u32, input_ids.dim(D::Minus1)? as u32, input_ids.device())?
+                    .unsqueeze(0)?
+                    .unsqueeze(0)?
+                    .broadcast_as((3, input_ids.dim(0)?, input_ids.dim(D::Minus1)?))?
+                    .contiguous()?;
+            let mrope_position_deltas = Tensor::zeros(
+                (input_ids.dim(0)?, 1),
+                input_ids.dtype(),
+                input_ids.device(),
+            )?;
+            Ok((position_ids, mrope_position_deltas))
         }
     }
 
@@ -1127,14 +1120,14 @@ impl Qwen2_5VLModel {
         second_per_grid_ts: Option<Vec<f32>>,
     ) -> Result<Tensor> {
         // input_ids shape: (bs, seq_len)
-        let mut inputs_embeds = self.model.embed_tokens.forward(&input_ids)?;
+        let mut inputs_embeds = self.model.embed_tokens.forward(input_ids)?;
         // inputs_embeds shape: (bs, seq_len, hidden_dim)
-        if pixel_values.is_some() && image_grid_thw.is_some() {
+        if let Some(pixel_values) = pixel_values
+            && let Some(image_grid_thw) = image_grid_thw
+        {
             // image_embed shape: (seq_len, hidden_dim)
-            let image_embed = self
-                .visual
-                .forward(pixel_values.unwrap(), image_grid_thw.unwrap())?;
-            let vision_mask = get_equal_mask(&input_ids, self.cfg.image_token_id as u32)?;
+            let image_embed = self.visual.forward(pixel_values, image_grid_thw)?;
+            let vision_mask = get_equal_mask(input_ids, self.cfg.image_token_id as u32)?;
 
             let n_image_tokens = vision_mask.sum_all()?.to_scalar::<u32>()?;
             if n_image_tokens as usize != image_embed.dim(0)? {
@@ -1146,12 +1139,12 @@ impl Qwen2_5VLModel {
             }
             inputs_embeds = masked_scatter_dim0(&inputs_embeds, &image_embed, &vision_mask)?;
         }
-        if pixel_values_video.is_some() && video_grid_thw.is_some() {
-            let video_embed = self
-                .visual
-                .forward(pixel_values_video.unwrap(), video_grid_thw.unwrap())?;
+        if let Some(pixel_values_video) = pixel_values_video
+            && let Some(video_grid_thw) = video_grid_thw
+        {
+            let video_embed = self.visual.forward(pixel_values_video, video_grid_thw)?;
 
-            let vision_mask = get_equal_mask(&input_ids, self.cfg.video_token_id as u32)?;
+            let vision_mask = get_equal_mask(input_ids, self.cfg.video_token_id as u32)?;
             let n_video_tokens = vision_mask.sum_all()?.to_scalar::<u32>()?;
             if n_video_tokens as usize != video_embed.dim(0)? {
                 return Err(anyhow!(format!(
@@ -1162,8 +1155,8 @@ impl Qwen2_5VLModel {
             }
             inputs_embeds = masked_scatter_dim0(&inputs_embeds, &video_embed, &vision_mask)?;
         }
-        let mut position_ids;
-        let mut rope_deltas;
+        let position_ids;
+        let rope_deltas;
         if (cache_position.is_some() && cache_position.unwrap().i(0)?.to_scalar::<u32>()? == 0)
             || self.rope_deltas.is_none()
         {
@@ -1177,12 +1170,11 @@ impl Qwen2_5VLModel {
             self.rope_deltas = Some(rope_deltas);
         } else {
             let (bs, seq_len, _) = inputs_embeds.dims3()?;
-            let delta = if cache_position.is_some() {
+            let delta = if let Some(cache_position) = cache_position {
                 cache_position
-                    .unwrap()
                     .i(0)?
                     .to_dtype(self.rope_deltas.as_ref().unwrap().dtype())?
-                    .broadcast_add(&self.rope_deltas.as_ref().unwrap())?
+                    .broadcast_add(self.rope_deltas.as_ref().unwrap())?
                     .contiguous()?
                     .to_dtype(candle_core::DType::U32)?
             } else {

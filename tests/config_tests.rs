@@ -1,4 +1,7 @@
-use aha::models::{minicpm4::config::MiniCPM4Config, qwen2_5vl::config::Qwen2_5VLConfig, voxcpm::config::VoxCPMConfig};
+use aha::models::{
+    minicpm4::config::MiniCPM4Config, qwen2_5vl::config::Qwen2_5VLConfig,
+    voxcpm::config::VoxCPMConfig,
+};
 use anyhow::Result;
 
 #[test]
@@ -10,7 +13,6 @@ fn qwen2_5_vl_config() -> Result<()> {
     println!("{:?}", config);
     Ok(())
 }
-
 
 #[test]
 fn minicpm4_config() -> Result<()> {

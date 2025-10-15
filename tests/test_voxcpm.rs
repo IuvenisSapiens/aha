@@ -1,20 +1,16 @@
-use anyhow::{Ok, Result};
-use std::{time::Instant};
+use std::time::Instant;
 
 use aha::{
-    models::voxcpm::{ generate::VoxCPMGenerate,
-        tokenizer::SingleChineseTokenizer,
-    },
-    utils::{
-        audio_utils::save_wav,
-    },
+    models::voxcpm::{generate::VoxCPMGenerate, tokenizer::SingleChineseTokenizer},
+    utils::audio_utils::save_wav,
 };
+use anyhow::{Ok, Result};
 
 #[test]
 fn voxcpm_generate() -> Result<()> {
     // RUST_BACKTRACE=1 cargo test -F cuda,flash-attn voxcpm_generate -- --nocapture
     let model_path = "/home/jhq/huggingface_model/openbmb/VoxCPM-0.5B/";
-    
+
     let i_start = Instant::now();
     let mut voxcpm_generate = VoxCPMGenerate::init(model_path, None, None)?;
     let i_duration = i_start.elapsed();
@@ -54,7 +50,7 @@ fn voxcpm_generate() -> Result<()> {
 
     let i_duration = i_start.elapsed();
     println!("Time elapsed in generate is: {:?}", i_duration);
-    let _ = save_wav(&generate, "voxcpm.wav")?;
+    save_wav(&generate, "voxcpm.wav")?;
     Ok(())
 }
 
