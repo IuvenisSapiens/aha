@@ -42,6 +42,11 @@ pub struct CausalConvTranspose1d {
     output_padding: usize,
 }
 
+// 元素间：stride-1
+// 两边： k-p-1
+// (h-1)*s -2p+k
+// (h+1)*s
+
 impl CausalConvTranspose1d {
     pub fn new(
         weight: Tensor,
@@ -161,6 +166,7 @@ impl Snake1d {
         Ok(Self { alpha })
     }
 
+    // x + sin(alpha*x)^2 / alpha
     pub fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let dims = x.dims();
         let x = x.reshape((dims[0], dims[1], ()))?;
@@ -192,7 +198,7 @@ impl CausalResidualUnit {
         kernel: usize,
         groups: usize,
     ) -> Result<Self> {
-        let pad = ((7 - 1) * dilation) / 2;
+        let pad = ((kernel - 1) * dilation) / 2;
         let block0 = Snake1d::new(vb.pp("block.0"), dim)?;
         let block1 =
             WNCausalConv1d::new(vb.pp("block.1"), dim, dim, kernel, dilation, pad, groups, 1)?;

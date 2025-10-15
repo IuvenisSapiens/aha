@@ -598,12 +598,10 @@ impl VoxCPMModel {
             inference_timesteps,
             cfg_value,
         )?;
-        println!("laten_pred: {}", latent_pred);
         let decode_audio = self
             .audio_vae
             .decode(&latent_pred.to_dtype(DType::F32)?)?
             .squeeze(1)?;
-        println!("decode_audio: {}", decode_audio);
         let decode_audio_len = decode_audio.dim(D::Minus1)? - 640 - 640;
         let decode_audio = decode_audio.narrow(D::Minus1, 640, decode_audio_len)?;
         Ok(decode_audio)
