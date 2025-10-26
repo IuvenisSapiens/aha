@@ -17,17 +17,24 @@ fn qwen3vl_generate() -> Result<()> {
         "messages": [
             {
                 "role": "user",
-                "content": [ 
+                "content": [   
                     {
                         "type": "video",
                         "video_url": 
                         {
                             "url": "./assets/video/video_test.mp4"
                         }
-                    },               
+                    },                  
+                    {
+                        "type": "image",
+                        "image_url": 
+                        {
+                            "url": "file://./assets/img/voxcpm.png"
+                        }
+                    },                                   
                     {
                         "type": "text", 
-                        "text": "视频中发生了什么."
+                        "text": "描述视频和图片内容"
                     }
                 ]
             }
@@ -62,15 +69,15 @@ async fn qwen3vl_stream() -> Result<()> {
                 "role": "user",
                 "content": [ 
                     {
-                        "type": "image",
-                        "image_url": 
+                        "type": "video",
+                        "video_url": 
                         {
-                            "url": "file://./assets/img/voxcpm.png"
+                            "url": "./assets/video/video_test.mp4"
                         }
                     },              
                     {
                         "type": "text", 
-                        "text": "描述这张图片"
+                        "text": "视频中发生了什么？"
                     }
                 ]
             }

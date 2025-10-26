@@ -415,11 +415,12 @@ impl Qwen3VLVisionModel {
         let mut patch_pos_embeds_permute = vec![];
         let patch_pos_embeds = split_tensor(&patch_pos_embeds, &split_idx, 0)?;
         let merge_size = self.spatial_merge_size;
-        for i in 0..grid_thw.dim(0)? {
+        // for i in 0..grid_thw.dim(0)? {
+        for (i, pos_embed) in patch_pos_embeds.iter().enumerate() {
             let [t, h, w] = grid_thw.i(i)?.to_vec1::<u32>()?[..] else {
                 return Err(anyhow!(format!("grid_thw Expected exactly 3 elements")));
             };
-            let pos_embed = &patch_pos_embeds[i];
+            // let pos_embed = &patch_pos_embeds[i];
             let pos_emebd_last_dim = pos_embed.dim(D::Minus1)?;
             let pos_embed = pos_embed.repeat((t as usize, 1))?;
             let shape = Shape::from(vec![
@@ -803,13 +804,13 @@ impl Qwen3VLTextModel {
         };
         for (layer_idx, layer) in self.layers.iter_mut().enumerate() {
             xs = layer.forward(&xs, &cos, &sin, attention_mask)?;
-            if deepstack_visual_embeds.is_some()
-                && layer_idx < deepstack_visual_embeds.as_ref().unwrap().len()
+            if let Some(deepstack_embeds) = deepstack_visual_embeds.as_ref()
+                && layer_idx < deepstack_embeds.len()
             {
                 xs = mask_index_add(
                     &xs.squeeze(0)?,
                     &visual_pos_masks.unwrap().squeeze(0)?,
-                    &deepstack_visual_embeds.as_ref().unwrap()[layer_idx],
+                    &deepstack_embeds[layer_idx],
                 )?
                 .unsqueeze(0)?;
             }
@@ -1169,38 +1170,41 @@ impl Qwen3VLModel {
         }
         let mut visual_pos_mask = None;
         let mut deepstack_visual_embeds = None;
-        if image_mask.is_some() && video_mask.is_some() {
-            let image_mask_ = image_mask.unwrap();
-            let video_mask_ = video_mask.unwrap();
-            let visual_mask = bitor_tensor(&image_mask_, &video_mask_)?;
-            let visual_none_zero_index = nonzero_index(&visual_mask)?;
-            let image_mask_joint = image_mask_.gather(&visual_none_zero_index, 0)?;
-            let image_nonzero_joint = nonzero_index(&image_mask_joint)?;
-            let video_mask_joint = video_mask_.gather(&visual_none_zero_index, 0)?;
-            let video_nonzero_joint = nonzero_index(&video_mask_joint)?;
-            let mut deepstack_embeds = vec![];
-            let visual_len = visual_none_zero_index.dim(0)?;
-            for (img_embed, vid_embed) in deepstack_image_embeds
-                .unwrap()
-                .iter()
-                .zip(deepstack_video_embeds.unwrap().iter())
-            {
-                let embed_joint = Tensor::zeros(
-                    (visual_len, img_embed.dim(D::Minus1)?),
-                    img_embed.dtype(),
-                    img_embed.device(),
-                )?;
-                let embed_joint = embed_joint.index_add(&image_nonzero_joint, img_embed, 0)?;
-                let embed_joint = embed_joint.index_add(&video_nonzero_joint, vid_embed, 0)?;
-                deepstack_embeds.push(embed_joint);
+        // if image_mask.is_some() && video_mask.is_some() {
+        if let Some(image_mask_) = image_mask {
+            if let Some(video_mask_) = video_mask {
+                let image_mask_ = image_mask_.squeeze(0)?;
+                let video_mask_ = video_mask_.squeeze(0)?;
+                let visual_mask = bitor_tensor(&image_mask_, &video_mask_)?;
+                let visual_none_zero_index = nonzero_index(&visual_mask)?;
+                let image_mask_joint = image_mask_.gather(&visual_none_zero_index, 0)?;
+                let image_nonzero_joint = nonzero_index(&image_mask_joint)?;
+                let video_mask_joint = video_mask_.gather(&visual_none_zero_index, 0)?;
+                let video_nonzero_joint = nonzero_index(&video_mask_joint)?;
+                let mut deepstack_embeds = vec![];
+                let visual_len = visual_none_zero_index.dim(0)?;
+                for (img_embed, vid_embed) in deepstack_image_embeds
+                    .unwrap()
+                    .iter()
+                    .zip(deepstack_video_embeds.unwrap().iter())
+                {
+                    let embed_joint = Tensor::zeros(
+                        (visual_len, img_embed.dim(D::Minus1)?),
+                        img_embed.dtype(),
+                        img_embed.device(),
+                    )?;
+                    let embed_joint = embed_joint.index_add(&image_nonzero_joint, img_embed, 0)?;
+                    let embed_joint = embed_joint.index_add(&video_nonzero_joint, vid_embed, 0)?;
+                    deepstack_embeds.push(embed_joint);
+                }
+                visual_pos_mask = Some(visual_mask.unsqueeze(0)?);
+                deepstack_visual_embeds = Some(deepstack_embeds);
+            } else {
+                visual_pos_mask = Some(image_mask_);
+                deepstack_visual_embeds = deepstack_image_embeds;
             }
-            visual_pos_mask = Some(visual_mask);
-            deepstack_visual_embeds = Some(deepstack_embeds);
-        } else if image_mask.is_some() {
-            visual_pos_mask = image_mask;
-            deepstack_visual_embeds = deepstack_image_embeds;
-        } else if video_mask.is_some() {
-            visual_pos_mask = video_mask;
+        } else if let Some(video_mask_) = video_mask {
+            visual_pos_mask = Some(video_mask_);
             deepstack_visual_embeds = deepstack_video_embeds;
         }
 
