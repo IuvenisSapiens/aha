@@ -7,10 +7,10 @@ license = "Apache-2.0"
 description = "aha model inference library, now supports Qwen2.5VL, MiniCPM4, VoxCPM, and Qwen3VL"
 
 [dependencies]
-candle-core = { git = "https://github.com/huggingface/candle.git", version = "0.9.1"}
-candle-nn = { git = "https://github.com/huggingface/candle.git", version = "0.9.1"}
-candle-transformers = { git = "https://github.com/huggingface/candle.git", version = "0.9.1"}
-candle-flash-attn = { git = "https://github.com/huggingface/candle.git", version = "0.9.1", optional = true }
+candle-core = { git = "https://github.com/huggingface/candle.git", version = "0.9.1", tag = "0.9.1"}
+candle-nn = { git = "https://github.com/huggingface/candle.git", version = "0.9.1", tag = "0.9.1"}
+candle-transformers = { git = "https://github.com/huggingface/candle.git", version = "0.9.1", tag = "0.9.1"}
+candle-flash-attn = { git = "https://github.com/huggingface/candle.git", version = "0.9.1", tag = "0.9.1", optional = true }
 serde = "1.0.226"
 serde_json = "1.0.145"
 anyhow = "1.0.100"
