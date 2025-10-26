@@ -259,7 +259,7 @@ impl Qwen3VLProcessor {
         fps: f32,
         t_merge_size: usize,
     ) -> Result<Vec<f32>> {
-        let indices = if frames_indices.len() % t_merge_size != 0 {
+        let indices = if !frames_indices.len().is_multiple_of(t_merge_size) {
             let mut frames_indices = frames_indices.clone();
             let last = frames_indices[frames_indices.len() - 1];
             let pad_len = t_merge_size - frames_indices.len() % t_merge_size;
@@ -385,12 +385,15 @@ impl Qwen3VLProcessor {
                 let frame_seqlen = h * w / merge_length as u32;
                 for frame_idx in 0..t {
                     let curr_time = curr_timestamp[frame_idx as usize];
-                    video_placeholder = video_placeholder + format!("<{:.1} seconds>", curr_time).as_str();
-                    video_placeholder = video_placeholder + self.vision_start_token.as_str();
-                    video_placeholder = video_placeholder + "<|placeholder|>".repeat(frame_seqlen as usize).as_str();
-                    video_placeholder = video_placeholder + self.vision_end_token.as_str();
+                    video_placeholder += format!("<{:.1} seconds>", curr_time).as_str();
+                    video_placeholder += self.vision_start_token.as_str();
+                    video_placeholder += "<|placeholder|>".repeat(frame_seqlen as usize).as_str();
+                    video_placeholder += self.vision_end_token.as_str();
                 }
-                let three_token = format!("{}{}{}", self.vision_start_token, self.video_token, self.vision_end_token);
+                let three_token = format!(
+                    "{}{}{}",
+                    self.vision_start_token, self.video_token, self.vision_end_token
+                );
                 if text.contains(&three_token) {
                     text = text.replacen(&three_token, &video_placeholder, 1);
                 } else {

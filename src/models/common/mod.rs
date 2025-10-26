@@ -280,17 +280,17 @@ pub fn eager_attention_forward(
 ) -> Result<Tensor> {
     let key_states = match num_key_value_groups {
         Some(g) => repeat_kv(key_states.clone(), g)?.contiguous()?,
-        None => key_states.clone()
+        None => key_states.clone(),
     };
     let value_states = match num_key_value_groups {
         Some(g) => repeat_kv(value_states.clone(), g)?.contiguous()?,
-        None => value_states.clone()
+        None => value_states.clone(),
     };
     let attn_output = {
         #[cfg(not(feature = "flash-attn"))]
         {
             let attn_weights = query_states.matmul(&key_states.transpose(D::Minus2, D::Minus1)?)?;
-            let attn_weights = (attn_weights * scaling)?;            
+            let attn_weights = (attn_weights * scaling)?;
             let attn_weights = match attention_mask {
                 None => attn_weights,
                 Some(mask) => attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?,
@@ -317,6 +317,6 @@ pub fn eager_attention_forward(
         }
     };
     let attn_output = attn_output.transpose(1, 2)?.contiguous()?;
-    
+
     Ok(attn_output)
 }

@@ -118,7 +118,7 @@ impl<'a> GenerateModel for Qwen2_5VLGenerateModel<'a> {
         let response = build_completion_response(res, "qwen2.5vl");
         Ok(response)
     }
-    
+
     fn generate_stream(
         &mut self,
         mes: ChatCompletionParameters,

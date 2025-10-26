@@ -1,20 +1,26 @@
 use anyhow::{Result, anyhow};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
-use openai_dive::v1::resources::chat::{ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse};
-use rocket::futures::Stream;
+use openai_dive::v1::resources::chat::{
+    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
+};
 use rocket::async_stream::stream;
+use rocket::futures::Stream;
 
 use crate::{
     chat_template::ChatTemplate,
-    models::{GenerateModel, qwen3vl::{
-        config::{Qwen3VLConfig, Qwen3VLGenerationConfig},
-        model::Qwen3VLModel,
-        processor::Qwen3VLProcessor,
-    }},
+    models::{
+        GenerateModel,
+        qwen3vl::{
+            config::{Qwen3VLConfig, Qwen3VLGenerationConfig},
+            model::Qwen3VLModel,
+            processor::Qwen3VLProcessor,
+        },
+    },
     tokenizer::TokenizerModel,
     utils::{
-        build_completion_chunk_response, build_completion_response, find_type_files, get_device, get_dtype, get_logit_processor
+        build_completion_chunk_response, build_completion_response, find_type_files, get_device,
+        get_dtype, get_logit_processor,
     },
 };
 
@@ -57,7 +63,6 @@ impl<'a> Qwen3VLGenerateModel<'a> {
             generation_config,
         })
     }
-
 }
 
 impl<'a> GenerateModel for Qwen3VLGenerateModel<'a> {

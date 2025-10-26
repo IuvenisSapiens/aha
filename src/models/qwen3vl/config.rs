@@ -1,6 +1,5 @@
 use candle_nn::Activation;
 
-
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Size {
     pub longest_edge: usize,

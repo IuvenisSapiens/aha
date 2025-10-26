@@ -1135,7 +1135,7 @@ impl Qwen3VLModel {
             let (image_embeds, deepstack_img_embed) =
                 self.get_vision_features(pixel_values, image_grid_thw)?;
             let image_embeds = Tensor::cat(&image_embeds, 0)?;
-            let vision_mask = self.get_placeholder_mask(&input_ids, true)?;
+            let vision_mask = self.get_placeholder_mask(input_ids, true)?;
             let n_image_tokens = vision_mask.sum_all()?.to_scalar::<u32>()?;
             if n_image_tokens as usize != image_embeds.dim(0)? {
                 return Err(anyhow!(format!(
@@ -1154,7 +1154,7 @@ impl Qwen3VLModel {
             let (video_embeds, deepstack_video_embed) =
                 self.get_vision_features(pixel_values_video, video_grid_thw)?;
             let video_embeds = Tensor::cat(&video_embeds, 0)?;
-            let vision_mask = self.get_placeholder_mask(&input_ids, false)?;
+            let vision_mask = self.get_placeholder_mask(input_ids, false)?;
             let n_video_tokens = vision_mask.sum_all()?.to_scalar::<u32>()?;
             if n_video_tokens as usize != video_embeds.dim(0)? {
                 return Err(anyhow!(format!(
@@ -1190,8 +1190,8 @@ impl Qwen3VLModel {
                     img_embed.dtype(),
                     img_embed.device(),
                 )?;
-                let embed_joint = embed_joint.index_add(&image_nonzero_joint, &img_embed, 0)?;
-                let embed_joint = embed_joint.index_add(&video_nonzero_joint, &vid_embed, 0)?;
+                let embed_joint = embed_joint.index_add(&image_nonzero_joint, img_embed, 0)?;
+                let embed_joint = embed_joint.index_add(&video_nonzero_joint, vid_embed, 0)?;
                 deepstack_embeds.push(embed_joint);
             }
             visual_pos_mask = Some(visual_mask);

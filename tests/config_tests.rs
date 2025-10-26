@@ -1,5 +1,6 @@
 use aha::models::{
-    minicpm4::config::MiniCPM4Config, qwen2_5vl::config::Qwen2_5VLConfig, qwen3vl::config::Qwen3VLConfig, voxcpm::config::VoxCPMConfig
+    minicpm4::config::MiniCPM4Config, qwen2_5vl::config::Qwen2_5VLConfig,
+    qwen3vl::config::Qwen3VLConfig, voxcpm::config::VoxCPMConfig,
 };
 use anyhow::Result;
 

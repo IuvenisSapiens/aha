@@ -1,4 +1,4 @@
-pub mod processor;
 pub mod config;
-pub mod model;
 pub mod generate;
+pub mod model;
+pub mod processor;
