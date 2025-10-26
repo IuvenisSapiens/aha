@@ -5,7 +5,7 @@ pub mod video_utils;
 
 use anyhow::Result;
 use candle_core::{DType, Device};
-use candle_transformers::generation::LogitsProcessor;
+use candle_transformers::generation::{LogitsProcessor, Sampling};
 use openai_dive::v1::resources::{
     chat::{
         ChatCompletionChoice, ChatCompletionChunkChoice, ChatCompletionChunkResponse,
@@ -251,10 +251,33 @@ pub fn build_completion_chunk_response(
     response
 }
 
-pub fn get_logit_processor(temperature: Option<f32>, top_p: Option<f32>) -> LogitsProcessor {
-    LogitsProcessor::new(
-        34562,
-        temperature.map(|temp| temp as f64),
-        top_p.map(|tp| tp as f64),
-    )
+pub fn get_logit_processor(
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    top_k: Option<usize>,
+) -> LogitsProcessor {
+    match top_k {
+        None => LogitsProcessor::new(
+            34562,
+            temperature.map(|temp| temp as f64),
+            top_p.map(|tp| tp as f64),
+        ),
+        Some(k) => {
+            let sampling = match temperature {
+                None => Sampling::ArgMax,
+                Some(temperature) => match top_p {
+                    None => Sampling::TopK {
+                        k,
+                        temperature: temperature as f64,
+                    },
+                    Some(p) => Sampling::TopKThenTopP {
+                        k,
+                        p: p as f64,
+                        temperature: temperature as f64,
+                    },
+                },
+            };
+            LogitsProcessor::from_sampling(34562, sampling)
+        }
+    }
 }

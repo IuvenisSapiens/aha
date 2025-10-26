@@ -841,7 +841,7 @@ impl Qwen2_5VLTextModel {
             if seq_len <= 1 {
                 None
             } else {
-                Some(&self.prepare_causal_attention_mask(b_size, seq_len, seqlen_offset)?)
+                Some(&self.prepare_causal_attention_mask(b_size, seq_len, 0)?)
             }
         };
         for layer in self.layers.iter_mut() {

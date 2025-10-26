@@ -15,6 +15,7 @@
 * Qwen2.5VL - 阿里通义千问 2.5 多模态大语言模型
 * MiniCPM4 - 面壁智能 MiniCPM 系列语言模型
 * VoxCPM - 面壁智能语音生成模型
+* Qwen3VL - 阿里通义千问 3 多模态大语言模型
 
 ## 计划支持
 我们持续扩展支持的模型列表，欢迎贡献！
@@ -39,8 +40,8 @@ aha = { git = "https://github.com/jhqxxx/aha.git", features = ["cuda", "flash-at
 git clone https://github.com/jhqxxx/aha.git
 cd aha
 # 修改测试用例中模型路径
-# 运行 Qwen2.5VL 示例
-cargo test -F cuda qwen2_5vl_generate -- --nocapture
+# 运行 Qwen3VL 示例
+cargo test -F cuda qwen3vl_generate -- --nocapture
 
 # 运行 MiniCPM4 示例  
 cargo test -F cuda minicpm_generate -- --nocapture
@@ -91,6 +92,7 @@ fn main() -> Result<()> {
 │   │   ├── common
 │   │   ├── minicpm4
 │   │   ├── qwen2_5vl
+│   │   ├── qwen3vl
 │   │   ├── voxcpm
 │   │   └── mod.rs
 │   ├── position_embed
@@ -121,6 +123,9 @@ fn main() -> Result<()> {
 2. 提交新的 Issue，包含详细描述和复现步骤
 
 ## 更新日志
+### v0.1.1
+* 添加 Qwen3VL 模型
+
 ### v0.1.0
 * 初始版本发布
 * 支持 Qwen2.5VL, MiniCPM4, VoxCPM 模型

@@ -42,7 +42,7 @@ pub fn repeat_kv(xs: Tensor, n_rep: usize) -> Result<Tensor> {
     }
 }
 
-pub fn split(t: &Tensor, splits: &[usize], dim: D) -> Result<Vec<Tensor>> {
+pub fn split_tensor<D: Dim>(t: &Tensor, splits: &[usize], dim: D) -> Result<Vec<Tensor>> {
     let dim = dim.to_index(t.shape(), "split")?;
     let mut split_res = Vec::new();
     let mut index = 0;
@@ -240,4 +240,115 @@ pub fn linspace(start: f32, end: f32, steps: usize, device: &Device) -> Result<T
 
     let t = Tensor::from_slice(&data, steps, device)?;
     Ok(t)
+}
+
+pub fn bitor_tensor(mask1: &Tensor, mask2: &Tensor) -> Result<Tensor> {
+    assert!(
+        mask1.shape() == mask2.shape(),
+        " bitor_tensor two tensor shape mask be equal"
+    );
+    let bitor = mask1.add(&mask2)?.ne(&Tensor::zeros_like(&mask1)?)?;
+    Ok(bitor)
+}
+
+pub fn prod_tensor_last_dim(t: &Tensor) -> Result<Tensor> {
+    let prod = match t.rank() {
+        0 => t.clone(),
+        1 => {
+            let data_type = t.dtype();
+            let t_prod = match data_type {
+                DType::U8 => {
+                    let t_vec = t.to_vec1::<u8>()?;
+                    let prod = t_vec.iter().product::<u8>();
+                    Tensor::from_slice(&vec![prod], 1, t.device())?
+                }
+                DType::U32 => {
+                    let t_vec = t.to_vec1::<u32>()?;
+                    let prod = t_vec.iter().product::<u32>();
+                    Tensor::from_slice(&vec![prod], 1, t.device())?
+                }
+                DType::I64 => {
+                    let t_vec = t.to_vec1::<i64>()?;
+                    let prod = t_vec.iter().product::<i64>();
+                    Tensor::from_slice(&vec![prod], 1, t.device())?
+                }
+                DType::F64 => {
+                    let t_vec = t.to_vec1::<f64>()?;
+                    let prod = t_vec.iter().product::<f64>();
+                    Tensor::from_slice(&vec![prod], 1, t.device())?
+                }
+                _ => {
+                    let t_vec = t.to_vec1::<f32>()?;
+                    let prod = t_vec.iter().product::<f32>();
+                    Tensor::from_slice(&vec![prod], 1, t.device())?
+                }
+            };
+            t_prod
+        }
+        2 => {
+            let data_type = t.dtype();
+            let t_prod = match data_type {
+                DType::U8 => {
+                    let t_vec = t.to_vec2::<u8>()?;
+                    let mut prod_vec = vec![];
+                    for v in t_vec.iter() {
+                        let prod = v.iter().product::<u8>();
+                        prod_vec.push(prod);
+                    }
+                    Tensor::new(prod_vec, t.device())?
+                }
+                DType::U32 => {
+                    let t_vec = t.to_vec2::<u32>()?;
+                    let mut prod_vec = vec![];
+                    for v in t_vec.iter() {
+                        let prod = v.iter().product::<u32>();
+                        prod_vec.push(prod);
+                    }
+                    Tensor::new(prod_vec, t.device())?
+                }
+                DType::I64 => {
+                    let t_vec = t.to_vec2::<i64>()?;
+                    let mut prod_vec = vec![];
+                    for v in t_vec.iter() {
+                        let prod = v.iter().product::<i64>();
+                        prod_vec.push(prod);
+                    }
+                    Tensor::new(prod_vec, t.device())?
+                }
+                DType::F64 => {
+                    let t_vec = t.to_vec2::<f64>()?;
+                    let mut prod_vec = vec![];
+                    for v in t_vec.iter() {
+                        let prod = v.iter().product::<f64>();
+                        prod_vec.push(prod);
+                    }
+                    Tensor::new(prod_vec, t.device())?
+                }
+                _ => {
+                    let t_vec = t.to_vec2::<f32>()?;
+                    let mut prod_vec = vec![];
+                    for v in t_vec.iter() {
+                        let prod = v.iter().product::<f32>();
+                        prod_vec.push(prod);
+                    }
+                    Tensor::new(prod_vec, t.device())?
+                }
+            };
+            t_prod
+        }
+        _ => {
+            return Err(anyhow!(format!("can not action this dim")));
+        }
+    };
+    Ok(prod)
+}
+
+pub fn mask_index_add(
+    original: &Tensor,
+    mask: &Tensor,
+    add: &Tensor,
+) -> Result<Tensor> {    
+    let visual_nonzero_index = nonzero_index(&mask)?;
+    let xs = original.index_add(&visual_nonzero_index, add, 0)?;
+    Ok(xs)
 }

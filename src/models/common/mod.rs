@@ -269,3 +269,54 @@ impl AttentionNobias {
         self.kv_cache = None
     }
 }
+
+pub fn eager_attention_forward(
+    query_states: &Tensor,
+    key_states: &Tensor,
+    value_states: &Tensor,
+    num_key_value_groups: Option<usize>,
+    attention_mask: Option<&Tensor>,
+    scaling: f64,
+) -> Result<Tensor> {
+    let key_states = match num_key_value_groups {
+        Some(g) => repeat_kv(key_states.clone(), g)?.contiguous()?,
+        None => key_states.clone()
+    };
+    let value_states = match num_key_value_groups {
+        Some(g) => repeat_kv(value_states.clone(), g)?.contiguous()?,
+        None => value_states.clone()
+    };
+    let attn_output = {
+        #[cfg(not(feature = "flash-attn"))]
+        {
+            let attn_weights = query_states.matmul(&key_states.transpose(D::Minus2, D::Minus1)?)?;
+            let attn_weights = (attn_weights * scaling)?;            
+            let attn_weights = match attention_mask {
+                None => attn_weights,
+                Some(mask) => attn_weights.broadcast_add(&mask.to_dtype(attn_weights.dtype())?)?,
+            };
+            let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
+            attn_weights.matmul(&value_states)?
+        }
+        #[cfg(feature = "flash-attn")]
+        {
+            // use flash-attn,
+            // flash-attn shape: (bs, seq_len, num_head, head_dim)
+            let query_states = query_states.transpose(1, 2)?;
+            let key_states = key_states.transpose(1, 2)?;
+            let value_states = value_states.transpose(1, 2)?;
+            let attn_output = candle_flash_attn::flash_attn(
+                &query_states,
+                &key_states,
+                &value_states,
+                scaling as f32,
+                attention_mask.is_some(),
+            )?
+            .transpose(1, 2)?;
+            attn_output
+        }
+    };
+    let attn_output = attn_output.transpose(1, 2)?.contiguous()?;
+    
+    Ok(attn_output)
+}

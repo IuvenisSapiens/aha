@@ -2,6 +2,7 @@ pub mod common;
 pub mod minicpm4;
 pub mod qwen2_5vl;
 pub mod voxcpm;
+pub mod qwen3vl;
 
 use anyhow::Result;
 use openai_dive::v1::resources::chat::{
