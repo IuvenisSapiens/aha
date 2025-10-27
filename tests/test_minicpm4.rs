@@ -1,8 +1,8 @@
 use std::{pin::pin, time::Instant};
 
 use aha::models::{GenerateModel, minicpm4::generate::MiniCPMGenerateModel};
+use aha_openai_dive::v1::resources::chat::ChatCompletionParameters;
 use anyhow::Result;
-use openai_dive::v1::resources::chat::ChatCompletionParameters;
 use rocket::futures::StreamExt;
 
 #[test]

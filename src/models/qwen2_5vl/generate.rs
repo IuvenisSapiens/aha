@@ -1,10 +1,10 @@
 // use crate::models::GenerateStream;
+use aha_openai_dive::v1::resources::chat::{
+    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
+};
 use anyhow::{Result, anyhow};
 use candle_core::{D, DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
-use openai_dive::v1::resources::chat::{
-    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
-};
 use rocket::async_stream::stream;
 use rocket::futures::Stream;
 

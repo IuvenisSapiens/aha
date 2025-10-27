@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
+use aha_openai_dive::v1::resources::chat::{
+    ChatCompletionParameters, ChatMessage, ChatMessageContent, ChatMessageContentPart,
+};
 use anyhow::{Result, anyhow};
 use candle_core::{DType, Device, IndexOp, Shape, Tensor};
 use ffmpeg_next as ffmpeg;
 use image::DynamicImage;
 use num::integer::lcm;
-use openai_dive::v1::resources::chat::{
-    ChatCompletionParameters, ChatMessage, ChatMessageContent, ChatMessageContentPart,
-};
 
 use crate::{
     models::qwen2_5vl::config::VisionSetting,

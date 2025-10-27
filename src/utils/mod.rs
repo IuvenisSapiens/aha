@@ -3,10 +3,7 @@ pub mod img_utils;
 pub mod tensor_utils;
 pub mod video_utils;
 
-use anyhow::Result;
-use candle_core::{DType, Device};
-use candle_transformers::generation::{LogitsProcessor, Sampling};
-use openai_dive::v1::resources::{
+use aha_openai_dive::v1::resources::{
     chat::{
         ChatCompletionChoice, ChatCompletionChunkChoice, ChatCompletionChunkResponse,
         ChatCompletionResponse, ChatMessage, ChatMessageContent, DeltaChatMessage, DeltaFunction,
@@ -14,6 +11,9 @@ use openai_dive::v1::resources::{
     },
     shared::FinishReason,
 };
+use anyhow::Result;
+use candle_core::{DType, Device};
+use candle_transformers::generation::{LogitsProcessor, Sampling};
 
 pub fn get_device(device: Option<&Device>) -> Device {
     match device {

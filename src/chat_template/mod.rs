@@ -1,6 +1,6 @@
+use aha_openai_dive::v1::resources::chat::ChatCompletionParameters;
 use anyhow::{Result, anyhow};
 use minijinja::{Environment, Value as MiniJinjaValue, context};
-use openai_dive::v1::resources::chat::ChatCompletionParameters;
 
 use crate::utils::string_to_static_str;
 

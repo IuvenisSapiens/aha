@@ -1,9 +1,9 @@
+use aha_openai_dive::v1::resources::chat::{
+    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
+};
 use anyhow::{Result, anyhow};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
-use openai_dive::v1::resources::chat::{
-    ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
-};
 use rocket::async_stream::stream;
 use rocket::futures::Stream;
 

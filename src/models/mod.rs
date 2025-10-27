@@ -4,10 +4,10 @@ pub mod qwen2_5vl;
 pub mod qwen3vl;
 pub mod voxcpm;
 
-use anyhow::Result;
-use openai_dive::v1::resources::chat::{
+use aha_openai_dive::v1::resources::chat::{
     ChatCompletionChunkResponse, ChatCompletionParameters, ChatCompletionResponse,
 };
+use anyhow::Result;
 use rocket::futures::Stream;
 
 pub trait GenerateModel {
