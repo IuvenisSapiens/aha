@@ -20,6 +20,15 @@
 ## 计划支持
 我们持续扩展支持的模型列表，欢迎贡献！
 
+## 环境依赖
+1. ffmpeg: 
+* ubuntu/WSL
+```bash
+sudo apt-get update
+sudo apt-get install -y pkg-config ffmpeg libavutil-dev libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev libswresample-dev libswscale-dev
+```
+* windows参考： https://github.com/zmwangx/rust-ffmpeg/wiki/Notes-on-building
+
 ## 安装
 ### 作为库使用
 * cargo add aha

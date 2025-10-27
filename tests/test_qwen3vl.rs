@@ -24,17 +24,10 @@ fn qwen3vl_generate() -> Result<()> {
                         {
                             "url": "./assets/video/video_test.mp4"
                         }
-                    },                  
-                    {
-                        "type": "image",
-                        "image_url": 
-                        {
-                            "url": "file://./assets/img/voxcpm.png"
-                        }
-                    },                                   
+                    },                          
                     {
                         "type": "text", 
-                        "text": "描述视频和图片内容"
+                        "text": "视频中发生了什么"
                     }
                 ]
             }
