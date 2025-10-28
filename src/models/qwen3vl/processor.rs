@@ -162,8 +162,9 @@ impl Qwen3VLProcessor {
         // img_tensor: (t, c, h, w)
         let t = img_tensor.dim(0)?;
         let img_tensor = if t % self.img_process_cfg.temporal_patch_size != 0 {
-            let repeat_num = self.img_process_cfg.temporal_patch_size - t % self.img_process_cfg.temporal_patch_size;
-            let repeats = img_tensor.i(t-1)?.repeat((repeat_num, 1, 1, 1))?;
+            let repeat_num = self.img_process_cfg.temporal_patch_size
+                - t % self.img_process_cfg.temporal_patch_size;
+            let repeats = img_tensor.i(t - 1)?.repeat((repeat_num, 1, 1, 1))?;
             Tensor::cat(&[img_tensor, &repeats], 0)?
         } else {
             img_tensor.clone()
@@ -251,7 +252,7 @@ impl Qwen3VLProcessor {
                 .broadcast_sub(img_mean)?
                 .broadcast_div(img_std)?
                 .contiguous()?;
-            // t 
+            // t
             let (video_tensor, video_grid_thw) = self.process_vision_tensor(&video_tensor)?;
             pixel_values_vec.push(video_tensor);
             vision_grid_thws_vec.push(video_grid_thw);
