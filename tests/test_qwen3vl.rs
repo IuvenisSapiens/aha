@@ -22,7 +22,7 @@ fn qwen3vl_generate() -> Result<()> {
                         "type": "video",
                         "video_url": 
                         {
-                            "url": "./assets/video/video_test.mp4"
+                            "url": "https://www.w3schools.com/html/movie.mp4"
                         }
                     },                          
                     {
@@ -34,6 +34,8 @@ fn qwen3vl_generate() -> Result<()> {
         ]
     }
     "#;
+    // ./assets/video/video_test.mp4
+
     let mes: ChatCompletionParameters = serde_json::from_str(message)?;
     let i_start = Instant::now();
     let mut qwen3vl = Qwen3VLGenerateModel::init(model_path, None, None)?;

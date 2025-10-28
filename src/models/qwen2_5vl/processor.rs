@@ -107,6 +107,16 @@ impl Qwen2_5VLProcessor {
     }
 
     pub fn process_vision_tensor(&self, img_tensor: &Tensor) -> Result<(Tensor, Tensor)> {
+        // Check that data have `num_frames` divisible by `temporal_patch_size`
+        // img_tensor: (t, c, h, w)
+        let t = img_tensor.dim(0)?;
+        let img_tensor = if t % self.vision_setting.temporal_patch_size != 0 {
+            let repeat_num = self.vision_setting.temporal_patch_size - t % self.vision_setting.temporal_patch_size;
+            let repeats = img_tensor.i(t-1)?.repeat((repeat_num, 1, 1, 1))?;
+            Tensor::cat(&[img_tensor, &repeats], 0)?
+        } else {
+            img_tensor.clone()
+        };
         let channel = img_tensor.dim(1)?;
         let grid_t = img_tensor.dim(0)? / self.vision_setting.temporal_patch_size;
         let grid_h = img_tensor.dim(2)? / self.vision_setting.patch_size;
